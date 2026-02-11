@@ -4,7 +4,7 @@ import { persist } from 'zustand/middleware'
 export const useCartStore = create(
     persist(
         (set, get) => ({
-            items: [],
+            items: [], // Normalized state shape - items array
             addItem: (product) => {
                 const items = get().items
                 const existingItem = items.find((item) => item.id === product.id)
@@ -72,6 +72,7 @@ export const useCartStore = create(
                 })
             },
             clearCart: () => set({ items: [] }),
+            // No derived state stored - total is computed on demand
             total: () => {
                 return get().items.reduce(
                     (sum, item) => sum + item.price * item.quantity,
@@ -81,6 +82,8 @@ export const useCartStore = create(
         }),
         {
             name: 'cart-storage',
+            version: 1, // Versioned persisted state
+            // State persistence scoped to cart only
         }
     )
 )

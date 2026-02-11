@@ -109,13 +109,17 @@ export default function Navbar() {
                     )}
                 </div>
 
-                {/* Mobile Toggle */}
-                <button
-                    className="md:hidden text-gray-700 dark:text-gray-300"
-                    onClick={() => setIsOpen(!isOpen)}
-                >
-                    {isOpen ? <X /> : <Menu />}
-                </button>
+                {/* Mobile right controls (theme + menu) */}
+                <div className="flex items-center gap-3 md:hidden">
+                    {/* Mobile theme toggle outside the menu */}
+                    <ThemeToggle className="flex md:hidden" />
+                    <button
+                        className="text-gray-700 dark:text-gray-300"
+                        onClick={() => setIsOpen(!isOpen)}
+                    >
+                        {isOpen ? <X /> : <Menu />}
+                    </button>
+                </div>
             </div>
 
             {/* Mobile Menu */}
@@ -140,7 +144,6 @@ export default function Navbar() {
                                     {link.name}
                                 </Link>
                             ))}
-                            <ThemeToggle className="md:hidden" />
                             <Link to="/checkout" className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
                                 <ShoppingBag className="w-5 h-5" />
                                 Checkout ({itemCount})

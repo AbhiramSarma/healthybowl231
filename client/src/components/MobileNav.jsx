@@ -25,7 +25,8 @@ export default function MobileNav() {
             label: 'Checkout',
             path: '/checkout'
         },
-        { icon: <User size={22} />, label: 'Admin', path: '/admin' }
+        // User account (user can log in / view orders); admin login is only via URL or desktop nav
+        { icon: <User size={22} />, label: 'Account', path: '/account' }
     ];
 
     return (

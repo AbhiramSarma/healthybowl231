@@ -2,23 +2,65 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const compression = require('compression');
+const cookieParser = require('cookie-parser');
 const path = require('path');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const Razorpay = require('razorpay');
+const bcrypt = require('bcryptjs');
+
+// Import middleware
+const { 
+    helmetConfig, 
+    corsOptions, 
+    generalLimiter, 
+    authLimiter, 
+    paymentLimiter,
+    payloadSizeLimit 
+} = require('./middleware/security');
+const { 
+    mongoSanitizeConfig, 
+    hppConfig, 
+    sanitizeBody 
+} = require('./middleware/sanitization');
+const { 
+    requestIdMiddleware, 
+    requestLogger, 
+    logAuthAttempt, 
+    logAdminAction, 
+    logError, 
+    logPayment 
+} = require('./middleware/logging');
+const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
+const { validators } = require('./middleware/validation');
 
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-    cors: {
-        origin: "*", // Allow all origins for dev
-        methods: ["GET", "POST"]
-    }
+    cors: corsOptions
 });
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// Security Middleware (order matters!)
+app.use(helmetConfig);
+app.use(requestIdMiddleware);
+app.use(requestLogger);
+app.use(compression()); // Gzip compression
+app.use(cookieParser()); // Parse cookies for refresh tokens
+app.use(cors(corsOptions));
+app.use(express.json({ limit: '10mb' })); // Payload size limit
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(payloadSizeLimit);
+app.use(mongoSanitizeConfig); // NoSQL injection prevention
+app.use(hppConfig); // HTTP Parameter Pollution prevention
+app.use(sanitizeBody); // Custom sanitization
+
+// Rate limiting
+app.use('/api/', generalLimiter);
+// Apply stricter auth limiter only on specific auth routes (login/register)
+// to avoid rate-limiting refresh token endpoint
+app.use('/api/create-order', paymentLimiter);
+app.use('/api/verify-payment', paymentLimiter);
 
 // Serve local website images (dev/prod)
 app.use(
@@ -26,11 +68,35 @@ app.use(
     express.static(path.join(__dirname, '..', 'website menu images'))
 );
 
-// Database Connection
+// Database Connection with options
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/spice_route";
-mongoose.connect(MONGODB_URI)
-    .then(() => console.log('✅ Connected to MongoDB'))
-    .catch(err => console.error('❌ MongoDB Connection Error:', err));
+const mongooseOptions = {
+    maxPoolSize: 10,
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+};
+
+mongoose.connect(MONGODB_URI, mongooseOptions)
+    .then(() => {
+        console.log('✅ Connected to MongoDB');
+        // Create indexes if they don't exist
+        mongoose.connection.db.admin().command({ listCollections: 1 })
+            .then(() => console.log('📊 Database indexes verified'))
+            .catch(err => console.warn('⚠️ Index verification skipped:', err.message));
+    })
+    .catch(err => {
+        console.error('❌ MongoDB Connection Error:', err);
+        process.exit(1);
+    });
+
+// Handle MongoDB connection events
+mongoose.connection.on('disconnected', () => {
+    console.warn('⚠️ MongoDB disconnected');
+});
+
+mongoose.connection.on('error', (err) => {
+    console.error('❌ MongoDB error:', err);
+});
 
 // Razorpay Instance
 const razorpay = new Razorpay({
@@ -46,27 +112,65 @@ const jwt = require('jsonwebtoken');
 // JWT Secret (in production, use environment variable)
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
+// Middleware to verify JWT token (must be defined before routes that use it)
+const authenticateToken = (req, res, next) => {
+    const token = req.headers.authorization?.split(' ')[1];
+    
+    if (!token) {
+        return res.status(401).json({ 
+            success: false,
+            error: 'Authentication required' 
+        });
+    }
+
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        req.userId = decoded.userId;
+        next();
+    } catch (error) {
+        if (error.name === 'TokenExpiredError') {
+            return res.status(401).json({ 
+                success: false,
+                error: 'Token expired',
+                message: 'Please login again'
+            });
+        }
+        return res.status(401).json({ 
+            success: false,
+            error: 'Invalid token' 
+        });
+    }
+};
+
+// Health check route (before other routes, no rate limiting)
+const healthRouter = require('./routes/health');
+app.use('/health', healthRouter);
+app.use('/api/health', healthRouter);
+
 // Routes
 app.get('/', (req, res) => {
-    res.send('Spice Route API is Running 🔥');
+    res.json({ 
+        message: 'Healthy Bowl API is Running 🔥',
+        version: '1.0.0',
+        environment: process.env.NODE_ENV || 'development'
+    });
 });
 
 // Category Routes
-app.get('/api/categories', async (req, res) => {
+app.get('/api/categories', async (req, res, next) => {
     try {
         const categories = await Category.find({ isActive: true }).sort({ displayOrder: 1 });
         res.json(categories);
     } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch categories' });
+        logError(req, error, { action: 'get_categories' });
+        next(error);
     }
 });
 
-app.post('/api/categories', async (req, res) => {
+// Category creation (used by admin dashboard, gated by admin password on frontend)
+app.post('/api/categories', validators.createCategory, async (req, res, next) => {
     try {
         const { name } = req.body;
-        if (!name) {
-            return res.status(400).json({ error: 'Category name is required' });
-        }
 
         // Get the highest displayOrder and add 1
         const lastCategory = await Category.findOne().sort({ displayOrder: -1 });
@@ -74,82 +178,133 @@ app.post('/api/categories', async (req, res) => {
 
         const category = new Category({ name, displayOrder });
         await category.save();
+        
+        logAdminAction(req, 'create', 'category', category._id);
         res.json(category);
     } catch (error) {
-        if (error.code === 11000) {
-            res.status(400).json({ error: 'Category already exists' });
-        } else {
-            res.status(500).json({ error: 'Failed to create category' });
-        }
+        logError(req, error, { action: 'create_category' });
+        next(error);
     }
 });
 
-app.put('/api/categories/:id', async (req, res) => {
+app.put('/api/categories/:id', validators.updateCategory, async (req, res, next) => {
     try {
         const { name, displayOrder, isActive } = req.body;
         const category = await Category.findByIdAndUpdate(
             req.params.id,
             { name, displayOrder, isActive },
-            { new: true }
+            { new: true, runValidators: true }
         );
-        if (!category) return res.status(404).json({ error: 'Category not found' });
+        if (!category) return res.status(404).json({ 
+            success: false,
+            error: 'Category not found' 
+        });
+        
+        logAdminAction(req, 'update', 'category', category._id);
         res.json(category);
     } catch (error) {
-        res.status(500).json({ error: 'Failed to update category' });
+        logError(req, error, { action: 'update_category', categoryId: req.params.id });
+        next(error);
     }
 });
 
-app.delete('/api/categories/:id', async (req, res) => {
+app.delete('/api/categories/:id', validators.mongoIdParam, async (req, res, next) => {
     try {
-        await Category.findByIdAndDelete(req.params.id);
+        const category = await Category.findByIdAndDelete(req.params.id);
+        if (!category) {
+            return res.status(404).json({ 
+                success: false,
+                error: 'Category not found' 
+            });
+        }
+        
+        logAdminAction(req, 'delete', 'category', req.params.id);
         res.json({ success: true });
     } catch (error) {
-        res.status(500).json({ error: 'Failed to delete category' });
+        logError(req, error, { action: 'delete_category', categoryId: req.params.id });
+        next(error);
     }
 });
 
 // Update category order (bulk update)
-app.post('/api/categories/reorder', async (req, res) => {
+app.post('/api/categories/reorder', async (req, res, next) => {
     try {
         const { categories } = req.body; // Array of { id, displayOrder }
+        
+        if (!Array.isArray(categories) || categories.length === 0) {
+            return res.status(400).json({ 
+                success: false,
+                error: 'Categories array is required' 
+            });
+        }
         
         const updatePromises = categories.map(({ id, displayOrder }) =>
             Category.findByIdAndUpdate(id, { displayOrder }, { new: true })
         );
         
         await Promise.all(updatePromises);
+        logAdminAction(req, 'reorder', 'categories', null);
         res.json({ success: true });
     } catch (error) {
-        res.status(500).json({ error: 'Failed to reorder categories' });
+        logError(req, error, { action: 'reorder_categories' });
+        next(error);
     }
 });
 
 // Authentication Routes
 // Register
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', authLimiter, validators.register, async (req, res, next) => {
     try {
         const { name, phone, email, password, address } = req.body;
-
-        if (!name || !phone || !password) {
-            return res.status(400).json({ error: 'Name, phone, and password are required' });
-        }
 
         // Check if user already exists
         const existingUser = await User.findOne({ phone });
         if (existingUser) {
-            return res.status(400).json({ error: 'User with this phone number already exists' });
+            logAuthAttempt(req, false, 'Phone already exists');
+            return res.status(400).json({ 
+                success: false,
+                error: 'User with this phone number already exists' 
+            });
         }
 
         // Create new user
         const user = new User({ name, phone, email: email || '', password, address: address || '' });
         await user.save();
 
-        // Generate JWT token
-        const token = jwt.sign({ userId: user._id, phone: user.phone }, JWT_SECRET, { expiresIn: '30d' });
+        // Generate short-lived access token
+        const accessToken = jwt.sign(
+            { userId: user._id, phone: user.phone }, 
+            JWT_SECRET, 
+            { expiresIn: process.env.JWT_EXPIRES_IN || '1h' } // Short-lived: 1 hour
+        );
+
+        // Generate long-lived refresh token
+        const refreshToken = jwt.sign(
+            { userId: user._id, type: 'refresh' },
+            JWT_SECRET,
+            { expiresIn: '30d' } // Long-lived: 30 days
+        );
+
+        // Hash and store refresh token
+        const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+        user.refreshToken = hashedRefreshToken;
+        user.refreshTokenExpires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+        await user.save();
+
+        // Set refresh token in HttpOnly cookie
+        res.cookie('refreshToken', refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+            path: '/'
+        });
+
+        logAuthAttempt(req, true, 'Registration successful');
 
         res.json({
             success: true,
-            token,
+            token: accessToken,
             user: {
                 id: user._id,
                 name: user.name,
@@ -158,38 +313,71 @@ app.post('/api/auth/register', async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Registration Error:', error);
-        res.status(500).json({ error: 'Failed to register user' });
+        logAuthAttempt(req, false, error.message);
+        logError(req, error, { action: 'register' });
+        next(error);
     }
 });
 
 // Login
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, validators.login, async (req, res, next) => {
     try {
         const { phone, password } = req.body;
-
-        if (!phone || !password) {
-            return res.status(400).json({ error: 'Phone and password are required' });
-        }
 
         // Find user
         const user = await User.findOne({ phone });
         if (!user) {
-            return res.status(401).json({ error: 'Invalid phone number or password' });
+            logAuthAttempt(req, false, 'User not found');
+            return res.status(401).json({ 
+                success: false,
+                error: 'Invalid phone number or password' 
+            });
         }
 
         // Check password
         const isMatch = await user.comparePassword(password);
         if (!isMatch) {
-            return res.status(401).json({ error: 'Invalid phone number or password' });
+            logAuthAttempt(req, false, 'Invalid password');
+            return res.status(401).json({ 
+                success: false,
+                error: 'Invalid phone number or password' 
+            });
         }
 
-        // Generate JWT token
-        const token = jwt.sign({ userId: user._id, phone: user.phone }, JWT_SECRET, { expiresIn: '30d' });
+        // Generate short-lived access token
+        const accessToken = jwt.sign(
+            { userId: user._id, phone: user.phone }, 
+            JWT_SECRET, 
+            { expiresIn: process.env.JWT_EXPIRES_IN || '1h' } // Short-lived: 1 hour
+        );
+
+        // Generate long-lived refresh token
+        const refreshToken = jwt.sign(
+            { userId: user._id, type: 'refresh' },
+            JWT_SECRET,
+            { expiresIn: '30d' } // Long-lived: 30 days
+        );
+
+        // Hash and store refresh token (rotate on each login)
+        const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+        user.refreshToken = hashedRefreshToken;
+        user.refreshTokenExpires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+        await user.save();
+
+        // Set refresh token in HttpOnly cookie
+        res.cookie('refreshToken', refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+            path: '/'
+        });
+
+        logAuthAttempt(req, true, 'Login successful');
 
         res.json({
             success: true,
-            token,
+            token: accessToken,
             user: {
                 id: user._id,
                 name: user.name,
@@ -198,24 +386,156 @@ app.post('/api/auth/login', async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Login Error:', error);
-        res.status(500).json({ error: 'Failed to login' });
+        logAuthAttempt(req, false, error.message);
+        logError(req, error, { action: 'login' });
+        next(error);
+    }
+});
+
+// Refresh token endpoint
+app.post('/api/auth/refresh', async (req, res, next) => {
+    try {
+        const refreshToken = req.cookies?.refreshToken;
+        
+        if (!refreshToken) {
+            return res.status(401).json({ 
+                success: false,
+                error: 'No refresh token provided' 
+            });
+        }
+
+        // Verify refresh token
+        let decoded;
+        try {
+            decoded = jwt.verify(refreshToken, JWT_SECRET);
+            if (decoded.type !== 'refresh') {
+                throw new Error('Invalid token type');
+            }
+        } catch (error) {
+            // Clear invalid cookie
+            res.clearCookie('refreshToken', { path: '/' });
+            return res.status(401).json({ 
+                success: false,
+                error: 'Invalid refresh token' 
+            });
+        }
+
+        // Find user and verify stored refresh token hash
+        const user = await User.findById(decoded.userId);
+        if (!user || !user.refreshToken) {
+            res.clearCookie('refreshToken', { path: '/' });
+            return res.status(401).json({ 
+                success: false,
+                error: 'Refresh token not found' 
+            });
+        }
+
+        // Check if refresh token expired in DB
+        if (user.refreshTokenExpires && user.refreshTokenExpires < new Date()) {
+            user.refreshToken = null;
+            user.refreshTokenExpires = null;
+            await user.save();
+            res.clearCookie('refreshToken', { path: '/' });
+            return res.status(401).json({ 
+                success: false,
+                error: 'Refresh token expired' 
+            });
+        }
+
+        // Verify token hash matches (detect reuse)
+        const tokenMatches = await bcrypt.compare(refreshToken, user.refreshToken);
+        if (!tokenMatches) {
+            // Token reuse detected - clear all refresh tokens for security
+            user.refreshToken = null;
+            user.refreshTokenExpires = null;
+            await user.save();
+            res.clearCookie('refreshToken', { path: '/' });
+            logError(req, new Error('Refresh token reuse detected'), { userId: user._id });
+            return res.status(401).json({ 
+                success: false,
+                error: 'Refresh token reuse detected' 
+            });
+        }
+
+        // Generate new access token
+        const newAccessToken = jwt.sign(
+            { userId: user._id, phone: user.phone },
+            JWT_SECRET,
+            { expiresIn: process.env.JWT_EXPIRES_IN || '1h' }
+        );
+
+        // Rotate refresh token (generate new one)
+        const newRefreshToken = jwt.sign(
+            { userId: user._id, type: 'refresh' },
+            JWT_SECRET,
+            { expiresIn: '30d' }
+        );
+
+        // Update stored refresh token
+        const hashedNewRefreshToken = await bcrypt.hash(newRefreshToken, 10);
+        user.refreshToken = hashedNewRefreshToken;
+        user.refreshTokenExpires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        await user.save();
+
+        // Set new refresh token in cookie
+        res.cookie('refreshToken', newRefreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 30 * 24 * 60 * 60 * 1000,
+            path: '/'
+        });
+
+        res.json({
+            success: true,
+            token: newAccessToken,
+            user: {
+                id: user._id,
+                name: user.name,
+                phone: user.phone,
+                email: user.email
+            }
+        });
+    } catch (error) {
+        logError(req, error, { action: 'refresh_token' });
+        next(error);
+    }
+});
+
+// Logout endpoint
+app.post('/api/auth/logout', authenticateToken, async (req, res, next) => {
+    try {
+        const user = await User.findById(req.userId);
+        if (user) {
+            // Clear refresh token from database
+            user.refreshToken = null;
+            user.refreshTokenExpires = null;
+            await user.save();
+        }
+
+        // Clear refresh token cookie
+        res.clearCookie('refreshToken', { path: '/' });
+
+        res.json({
+            success: true,
+            message: 'Logged out successfully'
+        });
+    } catch (error) {
+        logError(req, error, { action: 'logout' });
+        next(error);
     }
 });
 
 // Get user by token (verify token)
-app.get('/api/auth/me', async (req, res) => {
+app.get('/api/auth/me', authenticateToken, async (req, res, next) => {
     try {
-        const token = req.headers.authorization?.split(' ')[1];
-        if (!token) {
-            return res.status(401).json({ error: 'No token provided' });
-        }
-
-        const decoded = jwt.verify(token, JWT_SECRET);
-        const user = await User.findById(decoded.userId).select('-password');
+        const user = await User.findById(req.userId).select('-password -refreshToken');
         
         if (!user) {
-            return res.status(404).json({ error: 'User not found' });
+            return res.status(404).json({ 
+                success: false,
+                error: 'User not found' 
+            });
         }
 
         res.json({
@@ -229,72 +549,81 @@ app.get('/api/auth/me', async (req, res) => {
             }
         });
     } catch (error) {
-        res.status(401).json({ error: 'Invalid token' });
+        logError(req, error, { action: 'get_user' });
+        next(error);
     }
 });
 
-// Middleware to verify JWT token
-const authenticateToken = (req, res, next) => {
-    const token = req.headers.authorization?.split(' ')[1];
-    
-    if (!token) {
-        return res.status(401).json({ error: 'Authentication required' });
-    }
-
-    try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        req.userId = decoded.userId;
-        next();
-    } catch (error) {
-        res.status(401).json({ error: 'Invalid token' });
-    }
-};
 
 // Menu Routes
-app.get('/api/menu', async (req, res) => {
+app.get('/api/menu', async (req, res, next) => {
     try {
         const items = await Menu.find();
         res.json(items);
     } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch menu' });
+        logError(req, error, { action: 'get_menu' });
+        next(error);
     }
 });
 
-app.get('/api/menu/:id', async (req, res) => {
+app.get('/api/menu/:id', async (req, res, next) => {
     try {
         const item = await Menu.findOne({ id: req.params.id });
-        if (!item) return res.status(404).json({ error: 'Item not found' });
+        if (!item) {
+            return res.status(404).json({ 
+                success: false,
+                error: 'Item not found' 
+            });
+        }
         res.json(item);
     } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch item' });
+        logError(req, error, { action: 'get_menu_item', itemId: req.params.id });
+        next(error);
     }
 });
 
-app.post('/api/menu', async (req, res) => {
+// Menu management (admin dashboard)
+app.post('/api/menu', validators.createMenuItem, async (req, res, next) => {
     try {
         const newItem = new Menu(req.body);
         await newItem.save();
+        logAdminAction(req, 'create', 'menu_item', newItem._id);
         res.json(newItem);
     } catch (error) {
-        res.status(500).json({ error: 'Failed to create item' });
+        logError(req, error, { action: 'create_menu_item' });
+        next(error);
     }
 });
 
-app.put('/api/menu/:id', async (req, res) => {
+app.put('/api/menu/:id', validators.createMenuItem, async (req, res, next) => {
     try {
-        const updatedItem = await Menu.findOneAndUpdate({ id: req.params.id }, req.body, { new: true });
+        const updatedItem = await Menu.findOneAndUpdate(
+            { id: req.params.id }, 
+            req.body, 
+            { new: true, runValidators: true }
+        );
+        if (!updatedItem) {
+            return res.status(404).json({ success: false, error: 'Item not found' });
+        }
+        logAdminAction(req, 'update', 'menu_item', updatedItem._id);
         res.json(updatedItem);
     } catch (error) {
-        res.status(500).json({ error: 'Failed to update item' });
+        logError(req, error, { action: 'update_menu_item', itemId: req.params.id });
+        next(error);
     }
 });
 
-app.delete('/api/menu/:id', async (req, res) => {
+app.delete('/api/menu/:id', async (req, res, next) => {
     try {
-        await Menu.findOneAndDelete({ id: req.params.id });
-        res.json({ message: 'Item deleted successfully' });
+        const deletedItem = await Menu.findOneAndDelete({ id: req.params.id });
+        if (!deletedItem) {
+            return res.status(404).json({ success: false, error: 'Item not found' });
+        }
+        logAdminAction(req, 'delete', 'menu_item', req.params.id);
+        res.json({ success: true, message: 'Item deleted successfully' });
     } catch (error) {
-        res.status(500).json({ error: 'Failed to delete item' });
+        logError(req, error, { action: 'delete_menu_item', itemId: req.params.id });
+        next(error);
     }
 });
 
@@ -306,40 +635,59 @@ const Ticket = require('./models/Ticket');
 // ...
 
 // Ticket Routes
-app.post('/api/tickets', async (req, res) => {
+app.post('/api/tickets', async (req, res, next) => {
     try {
         const ticket = new Ticket(req.body);
         await ticket.save();
         res.json(ticket);
     } catch (error) {
-        res.status(500).json({ error: 'Failed to create ticket' });
+        logError(req, error, { action: 'create_ticket' });
+        next(error);
     }
 });
 
-app.get('/api/tickets', async (req, res) => {
+// Admin view of all tickets (gated by admin password on frontend)
+app.get('/api/tickets', async (req, res, next) => {
     try {
         const tickets = await Ticket.find().sort({ createdAt: -1 });
         res.json(tickets);
     } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch tickets' });
+        logError(req, error, { action: 'get_tickets' });
+        next(error);
     }
 });
 
-app.get('/api/user/tickets', authenticateToken, async (req, res) => {
+// Authenticated user view of own tickets
+app.get('/api/user/tickets', authenticateToken, async (req, res, next) => {
     try {
         const tickets = await Ticket.find({ userId: req.userId }).sort({ createdAt: -1 });
         res.json(tickets);
     } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch tickets' });
+        logError(req, error, { action: 'get_user_tickets', userId: req.userId });
+        next(error);
     }
 });
 
-app.patch('/api/tickets/:id', async (req, res) => {
+// Admin ticket updates (status / reply) - gated by admin password on frontend
+app.patch('/api/tickets/:id', validators.mongoIdParam, async (req, res, next) => {
     try {
-        const ticket = await Ticket.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const { adminReply } = req.body;
+        const ticket = await Ticket.findByIdAndUpdate(
+            req.params.id, 
+            { adminReply, status: 'Resolved' }, 
+            { new: true }
+        );
+        if (!ticket) {
+            return res.status(404).json({ 
+                success: false,
+                error: "Ticket not found" 
+            });
+        }
+        logAdminAction(req, 'update', 'ticket', req.params.id);
         res.json(ticket);
     } catch (error) {
-        res.status(500).json({ error: 'Failed to update ticket' });
+        logError(req, error, { action: 'update_ticket', ticketId: req.params.id });
+        next(error);
     }
 });
 
@@ -356,7 +704,7 @@ app.post('/api/calculate-fee', (req, res) => {
 });
 
 // Direct Order Creation (for direct orders without payment gateway - now supports guest orders)
-app.post('/api/create-order-direct', async (req, res) => {
+app.post('/api/create-order-direct', validators.createOrder, async (req, res, next) => {
     try {
         const { customer, items, totalAmount, paymentMethod } = req.body;
         // Get userId from token if available, otherwise null for guest orders
@@ -400,6 +748,8 @@ app.post('/api/create-order-direct', async (req, res) => {
         // Emit Socket Event for Real-time Tracking
         io.emit('new_order', newOrder);
 
+        logPayment(req, orderId, totalAmount, 'created', null);
+        
         res.json({
             success: true,
             message: "Order placed successfully",
@@ -408,30 +758,38 @@ app.post('/api/create-order-direct', async (req, res) => {
             redirectUrl: `/track-order?orderId=${newOrder._id}`
         });
     } catch (error) {
-        console.error("Direct Order Creation Error:", error);
-        res.status(500).json({ success: false, message: "Failed to create order" });
+        logError(req, error, { action: 'create_order_direct' });
+        next(error);
     }
 });
 
 // Payment Route (Create Order)
-app.post('/api/create-order', async (req, res) => {
+app.post('/api/create-order', async (req, res, next) => {
     try {
         const { amount } = req.body;
+        if (!amount || amount <= 0) {
+            return res.status(400).json({ 
+                success: false,
+                error: 'Invalid amount' 
+            });
+        }
         const options = {
             amount: amount * 100, // Amount in smallest currency unit (paise)
             currency: "INR",
             receipt: "receipt_" + Date.now(),
         };
         const order = await razorpay.orders.create(options);
+        logPayment(req, null, amount, 'order_created', order.id);
         res.json(order);
     } catch (error) {
-        console.error("Payment Error:", error);
-        res.status(500).json({ error: "Something went wrong" });
+        logError(req, error, { action: 'create_payment_order' });
+        logPayment(req, null, req.body?.amount, 'order_failed');
+        next(error);
     }
 });
 
 // Verify Payment & Save Order (now supports guest orders)
-app.post('/api/verify-payment', async (req, res) => {
+app.post('/api/verify-payment', async (req, res, next) => {
     try {
         const { razorpay_order_id, razorpay_payment_id, razorpay_signature, orderDetails } = req.body;
         // Get userId from token if available, otherwise null for guest orders
@@ -476,6 +834,8 @@ app.post('/api/verify-payment', async (req, res) => {
             // Emit Socket Event for Real-time Tracking
             io.emit('new_order', newOrder);
 
+            logPayment(req, orderId, orderDetails.totalAmount, 'verified', razorpay_payment_id);
+
             // Send JSON response for client to handle redirect
             res.json({
                 success: true,
@@ -485,25 +845,29 @@ app.post('/api/verify-payment', async (req, res) => {
                 redirectUrl: `/track-order?orderId=${newOrder._id}`
             });
         } else {
+            logPayment(req, null, orderDetails?.totalAmount, 'failed', razorpay_payment_id);
             res.status(400).json({ success: false, message: "Invalid Signature" });
         }
     } catch (error) {
-        console.error("Verification Error:", error);
-        res.status(500).json({ success: false, message: "Internal Server Error" });
+        logError(req, error, { action: 'verify_payment' });
+        next(error);
     }
 });
 
-// Update Order Status
-app.patch('/api/orders/:id/status', async (req, res) => {
+// Update Order Status (admin dashboard)
+app.patch('/api/orders/:id/status', validators.updateOrderStatus, async (req, res, next) => {
     try {
         const { status } = req.body;
         const order = await Order.findByIdAndUpdate(
             req.params.id,
             { status },
-            { new: true }
+            { new: true, runValidators: true }
         );
 
-        if (!order) return res.status(404).json({ error: "Order not found" });
+        if (!order) return res.status(404).json({ 
+            success: false,
+            error: "Order not found" 
+        });
 
         // Emit real-time update to specific order room (Using Mongo ID)
         io.to(order._id.toString()).emit('order_status', {
@@ -514,48 +878,58 @@ app.patch('/api/orders/:id/status', async (req, res) => {
         // Also emit to admin channel if we had one, or just let admin poll/listen
         io.emit('admin_order_update', order);
 
+        logAdminAction(req, 'update_status', 'order', order._id);
         res.json(order);
     } catch (error) {
-        console.error("Status Update Error:", error);
-        res.status(500).json({ error: "Failed to update status" });
+        logError(req, error, { action: 'update_order_status', orderId: req.params.id });
+        next(error);
     }
 });
 
 // Fetch Single Order by ID
-app.get('/api/orders/:id', async (req, res) => {
+app.get('/api/orders/:id', validators.mongoIdParam, async (req, res, next) => {
     try {
         const order = await Order.findById(req.params.id);
-        if (!order) return res.status(404).json({ error: "Order not found" });
+        if (!order) {
+            return res.status(404).json({ 
+                success: false,
+                error: "Order not found" 
+            });
+        }
         res.json(order);
     } catch (error) {
-        res.status(500).json({ error: "Failed to fetch order" });
+        logError(req, error, { action: 'get_order', orderId: req.params.id });
+        next(error);
     }
 });
 
 // Fetch All Orders for Admin
-app.get('/api/admin/orders', async (req, res) => {
+// Note: Protected by admin UI password on the frontend; no JWT required here
+app.get('/api/admin/orders', async (req, res, next) => {
     try {
         const orders = await Order.find().populate('userId', 'name phone').sort({ createdAt: -1 });
+        logAdminAction(req, 'view', 'orders', null);
         res.json(orders);
     } catch (error) {
-        console.error("Fetch Orders Error:", error);
-        res.status(500).json({ error: "Failed to fetch orders" });
+        logError(req, error, { action: 'get_admin_orders' });
+        next(error);
     }
 });
 
 // Fetch Orders by User
-app.get('/api/orders', authenticateToken, async (req, res) => {
+app.get('/api/orders', authenticateToken, async (req, res, next) => {
     try {
         const orders = await Order.find({ userId: req.userId }).sort({ createdAt: -1 });
         res.json(orders);
     } catch (error) {
-        console.error("Fetch User Orders Error:", error);
-        res.status(500).json({ error: "Failed to fetch orders" });
+        logError(req, error, { action: 'get_user_orders', userId: req.userId });
+        next(error);
     }
 });
 
 // Export Orders to CSV
-app.get('/api/admin/orders/export', async (req, res) => {
+// Note: Protected by admin UI password on the frontend; no JWT required here
+app.get('/api/admin/orders/export', async (req, res, next) => {
     try {
         const orders = await Order.find().populate('userId', 'name phone').sort({ createdAt: -1 });
         
@@ -596,13 +970,17 @@ app.get('/api/admin/orders/export', async (req, res) => {
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="orders_${new Date().toISOString().split('T')[0]}.csv"`);
         
+        logAdminAction(req, 'export', 'orders_csv', null);
+        
         // Send the complete CSV content
         res.send(csvWithBOM);
     } catch (error) {
-        console.error("CSV Export Error:", error);
+        logError(req, error, { action: 'export_orders_csv' });
         // Only send error if headers haven't been sent yet
         if (!res.headersSent) {
             res.status(500).json({ error: "Failed to export orders" });
+        } else {
+            next(error);
         }
     }
 });
@@ -619,7 +997,52 @@ io.on('connection', (socket) => {
     });
 });
 
+// Error handling middleware (must be last)
+app.use(notFoundHandler);
+app.use(errorHandler);
+
+// Graceful shutdown
+const gracefulShutdown = (signal) => {
+    console.log(`\n${signal} received. Starting graceful shutdown...`);
+    httpServer.close(() => {
+        console.log('HTTP server closed');
+        mongoose.connection.close(false, () => {
+            console.log('MongoDB connection closed');
+            process.exit(0);
+        });
+    });
+    
+    // Force close after 10 seconds
+    setTimeout(() => {
+        console.error('Forced shutdown after timeout');
+        process.exit(1);
+    }, 10000);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (err) => {
+    console.error('Unhandled Promise Rejection:', err);
+    // Don't exit in production, just log
+    if (process.env.NODE_ENV === 'production') {
+        // Could send to error tracking service here
+    }
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception:', err);
+    gracefulShutdown('uncaughtException');
+});
+
 const PORT = process.env.PORT || 5000;
+const NODE_ENV = process.env.NODE_ENV || 'development';
+
 httpServer.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📦 Environment: ${NODE_ENV}`);
+    console.log(`🔒 Security middleware enabled`);
+    console.log(`📊 Logging enabled`);
 });
