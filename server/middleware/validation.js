@@ -99,7 +99,10 @@ const validators = {
   ],
   
   createCategory: [
-    commonRules.category,
+    body('name')
+      .trim()
+      .notEmpty().withMessage('Category name is required')
+      .isLength({ min: 1, max: 50 }).withMessage('Category name must be between 1 and 50 characters'),
     handleValidationErrors,
   ],
   
