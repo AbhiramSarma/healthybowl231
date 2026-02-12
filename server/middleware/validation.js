@@ -153,8 +153,9 @@ const validators = {
     body('productInfo.nutritionalFacts').optional().isObject().withMessage('nutritionalFacts must be an object'),
     // Custom validation: either price or priceOptions must be provided
     body().custom((value) => {
-      const hasPrice = value.price !== null && value.price !== undefined && value.price !== '';
-      const hasPriceOptions = Array.isArray(value.priceOptions) && value.priceOptions.length > 0 && value.priceOptions.some(opt => opt.price && opt.price > 0);
+      const hasPrice = value.price !== null && value.price !== undefined && value.price !== '' && Number(value.price) >= 0;
+      const hasPriceOptions = Array.isArray(value.priceOptions) && value.priceOptions.length > 0 && 
+        value.priceOptions.some(opt => opt && opt.price !== null && opt.price !== undefined && opt.price !== '' && Number(opt.price) >= 0);
       if (!hasPrice && !hasPriceOptions) {
         throw new Error('Either price or at least one price option with price must be provided');
       }
