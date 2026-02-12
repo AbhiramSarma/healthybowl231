@@ -111,8 +111,16 @@ const apiRequest = async (endpoint, options = {}) => {
     requestHeaders['Authorization'] = `Bearer ${token}`;
   }
 
-  // Build URL
-  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+  // Build URL - handle double slashes
+  let url;
+  if (endpoint.startsWith('http')) {
+    url = endpoint;
+  } else {
+    // Remove trailing slash from base URL and leading slash from endpoint to avoid double slashes
+    const base = API_BASE_URL.replace(/\/$/, '');
+    const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    url = base ? `${base}${path}` : path;
+  }
 
   // Create timeout
   const timeoutId = setTimeout(() => controller.abort(), timeout);

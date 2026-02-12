@@ -37,12 +37,28 @@ const corsOptions = {
     if (!origin) return callback(null, true);
     
     const allowedOrigins = process.env.ALLOWED_ORIGINS 
-      ? process.env.ALLOWED_ORIGINS.split(',')
+      ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
       : ['http://localhost:5173', 'http://localhost:3000'];
     
-    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+    // Check if origin matches any allowed origin
+    const isAllowed = allowedOrigins.some(allowed => {
+      // Exact match
+      if (origin === allowed) return true;
+      // Match with/without trailing slash
+      if (origin === allowed.replace(/\/$/, '') || origin === allowed + '/') return true;
+      // Match wildcard subdomains (e.g., *.vercel.app)
+      if (allowed.includes('*')) {
+        const pattern = allowed.replace(/\*/g, '[^.]*').replace(/\./g, '\\.');
+        const regex = new RegExp('^' + pattern + '$');
+        return regex.test(origin);
+      }
+      return false;
+    });
+    
+    if (isAllowed || process.env.NODE_ENV !== 'production') {
       callback(null, true);
     } else {
+      console.log(`CORS blocked: ${origin} not in allowed origins:`, allowedOrigins);
       callback(new Error('Not allowed by CORS'));
     }
   },
