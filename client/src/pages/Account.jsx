@@ -4,6 +4,7 @@ import { useAuthStore } from '../features/auth/authStore';
 import { Package, MessageSquare, ChevronRight, LogIn } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import apiUrl from '../lib/apiUrl';
 
 export default function Account() {
   const { isAuthenticated, user, token, init, verifyToken } = useAuthStore();
@@ -20,8 +21,8 @@ export default function Account() {
   useEffect(() => {
     if (isAuthenticated && token) {
       Promise.all([
-        fetch('/api/orders', { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
-        fetch('/api/user/tickets', { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+        fetch(apiUrl('/api/orders'), { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+        fetch(apiUrl('/api/user/tickets'), { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
       ])
         .then(([ord, tkt]) => {
           setOrders(Array.isArray(ord) ? ord : []);

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, CheckCircle, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../features/auth/authStore';
+import apiUrl from '../lib/apiUrl';
 
 export default function Support() {
     const { isAuthenticated, token, user } = useAuthStore();
@@ -16,7 +17,7 @@ export default function Support() {
         const fetchAccountOrders = async () => {
             if (!isAuthenticated || !token) return;
             try {
-                const res = await fetch('/api/orders', {
+                const res = await fetch(apiUrl('/api/orders'), {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 const data = await res.json();
@@ -88,7 +89,7 @@ export default function Support() {
 
         const payload = { ...formData };
         if (isAuthenticated && token && user?.id) payload.userId = user.id;
-        const res = await fetch('/api/tickets', {
+        const res = await fetch(apiUrl('/api/tickets'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)

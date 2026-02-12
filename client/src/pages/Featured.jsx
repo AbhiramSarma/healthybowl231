@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import MenuCard from '../features/menu/MenuCard';
+import apiUrl from '../lib/apiUrl';
 
 export default function Featured() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/menu')
+    fetch(apiUrl('/api/menu'))
       .then((r) => r.json())
       .then((data) => {
         const featured = (data || []).filter((i) => i.isFeatured).concat(

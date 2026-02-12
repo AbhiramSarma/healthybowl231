@@ -5,6 +5,7 @@ import { ArrowLeft, Plus, Minus, ShoppingBag } from 'lucide-react';
 import { useCartStore } from '../features/cart/cartStore';
 import { MENU_IMAGE_OVERRIDES } from '../features/menu/imageOverrides';
 import { cn } from '../lib/utils';
+import apiUrl from '../lib/apiUrl';
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -45,7 +46,7 @@ export default function ProductDetail() {
 
   useEffect(() => {
     if (!id) return;
-    fetch(`/api/menu/${id}`)
+    fetch(apiUrl(`/api/menu/${id}`))
       .then((r) => r.json())
       .then((data) => {
         setItem(data);
@@ -58,7 +59,7 @@ export default function ProductDetail() {
       })
       .then((product) => {
         if (!product?.category) return;
-        fetch('/api/menu')
+        fetch(apiUrl('/api/menu'))
           .then((r) => r.json())
           .then((all) => {
             const sameCat = all.filter((i) => i.category === product.category && i.id !== product.id && i.isAvailable !== false);

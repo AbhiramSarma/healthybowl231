@@ -5,6 +5,7 @@ import MenuCard from '../features/menu/MenuCard';
 import { Search, ChevronDown, X, ShoppingBag, ChevronRight } from 'lucide-react';
 import { useCartStore } from '../features/cart/cartStore';
 import { cn } from '../lib/utils';
+import apiUrl from '../lib/apiUrl';
 
 const SORT_OPTIONS = [
   { value: 'all', label: 'All' },
@@ -36,8 +37,8 @@ export default function Menu() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/categories').then((r) => r.json()).catch(() => []),
-      fetch('/api/menu').then((r) => r.json()).catch(() => []),
+      fetch(apiUrl('/api/categories')).then((r) => r.json()).catch(() => []),
+      fetch(apiUrl('/api/menu')).then((r) => r.json()).catch(() => []),
     ]).then(([cats, menuData]) => {
       setMenuItems(menuData);
       if (cats?.length > 0) {

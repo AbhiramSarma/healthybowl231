@@ -4,6 +4,7 @@ import { Check, ChefHat, Truck, MapPin, Package } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Link, useSearchParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
+import apiUrl from '../lib/apiUrl';
 
 // Use environment variable for socket URL or default to localhost
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
@@ -27,7 +28,7 @@ export default function TrackOrder() {
         if (!orderId) return;
 
         // Fetch Order Details
-        fetch(`/api/orders/${orderId}`)
+        fetch(apiUrl(`/api/orders/${orderId}`))
             .then(res => res.json())
             .then(data => {
                 setOrder(data);

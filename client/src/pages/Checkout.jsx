@@ -5,6 +5,7 @@ import { useAuthStore } from '../features/auth/authStore';
 import { useNavigate } from 'react-router-dom';
 import { CreditCard, Smartphone, MapPin, User, Phone, Wallet, Trash2, ChevronRight, Banknote } from 'lucide-react';
 import { cn } from '../lib/utils';
+import apiUrl from '../lib/apiUrl';
 
 export default function Checkout() {
     const { items, total, clearCart, removeItem, updateQuantity } = useCartStore();
@@ -19,7 +20,7 @@ export default function Checkout() {
 
     useEffect(() => {
         // Fetch dynamic delivery fee
-        fetch('/api/calculate-fee', { method: 'POST' })
+        fetch(apiUrl('/api/calculate-fee'), { method: 'POST' })
             .then(res => res.json())
             .then(data => setDeliveryFee(data.fee))
             .catch(err => console.error(err));
@@ -73,7 +74,7 @@ export default function Checkout() {
             const itemsWithPreferences = items;
 
             // For UPI/Card, use Razorpay flow
-            const orderRes = await fetch('/api/create-order', {
+            const orderRes = await fetch(apiUrl('/api/create-order'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ amount: grandTotal })
@@ -90,7 +91,7 @@ export default function Checkout() {
                     headers['Authorization'] = `Bearer ${token}`;
                 }
 
-                const verifyRes = await fetch('/api/verify-payment', {
+                const verifyRes = await fetch(apiUrl('/api/verify-payment'), {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify({
