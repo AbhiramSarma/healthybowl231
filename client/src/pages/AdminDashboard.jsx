@@ -5,7 +5,15 @@ import { io } from 'socket.io-client';
 import ThemeToggle from '../components/ThemeToggle';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 const socket = io(SOCKET_URL);
+
+// Helper function to build API URL
+const apiUrl = (endpoint) => {
+    const base = API_BASE_URL.replace(/\/$/, ''); // Remove trailing slash
+    const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    return base ? `${base}${path}` : path;
+};
 
 export default function AdminDashboard() {
     const [activeTab, setActiveTab] = useState('orders'); // menu | tickets | orders
@@ -63,13 +71,14 @@ export default function AdminDashboard() {
     }, []);
 
     const fetchItems = () => {
-        fetch('/api/menu')
+        fetch(apiUrl('/api/menu'))
             .then(res => res.json())
-            .then(data => setItems(data));
+            .then(data => setItems(data))
+            .catch(err => console.error('Failed to fetch menu:', err));
     };
 
     const fetchCategories = () => {
-        fetch('/api/categories')
+        fetch(apiUrl('/api/categories'))
             .then(res => res.json())
             .then(data => setCategories(data))
             .catch(err => console.error('Failed to fetch categories:', err));
@@ -82,7 +91,7 @@ export default function AdminDashboard() {
         }
 
         try {
-            const res = await fetch('/api/categories', {
+            const res = await fetch(apiUrl('/api/categories'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: newCategoryName.trim() })
@@ -124,7 +133,7 @@ export default function AdminDashboard() {
 
         // Save to server
         try {
-            await fetch('/api/categories/reorder', {
+            await fetch(apiUrl('/api/categories/reorder'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -149,7 +158,7 @@ export default function AdminDashboard() {
     const handleSaveCategoryName = async () => {
         if (!editingCategoryId || !editingCategoryName.trim()) return;
         try {
-            const res = await fetch(`/api/categories/${editingCategoryId}`, {
+            const res = await fetch(apiUrl(`/api/categories/${editingCategoryId}`), {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: editingCategoryName.trim() })
@@ -171,7 +180,7 @@ export default function AdminDashboard() {
         if (selectedCategories.size === 0) return;
         if (!window.confirm(`Delete ${selectedCategories.size} category(ies)?`)) return;
         try {
-            await Promise.all([...selectedCategories].map((id) => fetch(`/api/categories/${id}`, { method: 'DELETE' })));
+            await Promise.all([...selectedCategories].map((id) => fetch(apiUrl(`/api/categories/${id}`), { method: 'DELETE' })));
             setSelectedCategories(new Set());
             fetchCategories();
             fetchItems();
@@ -184,7 +193,7 @@ export default function AdminDashboard() {
         if (selectedItems.size === 0) return;
         if (!window.confirm(`Delete ${selectedItems.size} dish(es)?`)) return;
         try {
-            await Promise.all([...selectedItems].map((id) => fetch(`/api/menu/${id}`, { method: 'DELETE' })));
+            await Promise.all([...selectedItems].map((id) => fetch(apiUrl(`/api/menu/${id}`), { method: 'DELETE' })));
             setSelectedItems(new Set());
             fetchItems();
         } catch (e) {
@@ -224,7 +233,7 @@ export default function AdminDashboard() {
         }
 
         try {
-            const res = await fetch(`/api/categories/${categoryId}`, {
+            const res = await fetch(apiUrl(`/api/categories/${categoryId}`), {
                 method: 'DELETE'
             });
             if (res.ok) {
@@ -240,13 +249,13 @@ export default function AdminDashboard() {
     };
 
     const fetchTickets = () => {
-        fetch('/api/tickets')
+        fetch(apiUrl('/api/tickets'))
             .then(res => res.json())
             .then(data => setTickets(data));
     };
 
     const fetchOrders = () => {
-        fetch('/api/admin/orders')
+        fetch(apiUrl('/api/admin/orders'))
             .then(res => res.json())
             .then(data => setOrders(data));
     };
@@ -264,7 +273,7 @@ export default function AdminDashboard() {
         } else if (payload.price !== '' && payload.price != null) {
             payload.price = Number(payload.price);
         }
-        const res = await fetch(`/api/menu/${editingId}`, {
+            const res = await fetch(apiUrl(`/api/menu/${editingId}`), {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -278,7 +287,7 @@ export default function AdminDashboard() {
     };
 
     const updateOrderStatus = async (id, status) => {
-        await fetch(`/api/orders/${id}/status`, {
+        await fetch(apiUrl(`/api/orders/${id}/status`), {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status })
@@ -287,7 +296,7 @@ export default function AdminDashboard() {
     };
 
     const handleResolveTicket = async (id) => {
-        await fetch(`/api/tickets/${id}`, {
+        await fetch(apiUrl(`/api/tickets/${id}`), {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: 'Resolved' })
@@ -296,7 +305,7 @@ export default function AdminDashboard() {
     };
 
     const handleReopenTicket = async (id) => {
-        await fetch(`/api/tickets/${id}`, {
+        await fetch(apiUrl(`/api/tickets/${id}`), {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: 'Open' })
@@ -305,7 +314,7 @@ export default function AdminDashboard() {
     };
 
     const handleReplyTicket = async (id, reply) => {
-        await fetch(`/api/tickets/${id}`, {
+        await fetch(apiUrl(`/api/tickets/${id}`), {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ adminReply: reply })
@@ -354,7 +363,7 @@ export default function AdminDashboard() {
             return;
         }
         try {
-            const res = await fetch(`/api/menu/${itemId}`, {
+            const res = await fetch(apiUrl(`/api/menu/${itemId}`), {
                 method: 'DELETE'
             });
             if (res.ok) {
@@ -789,7 +798,7 @@ export default function AdminDashboard() {
                                                 price: mainPrice,
                                                 priceOptions: normalizedOpts
                                             };
-                                            const res = await fetch('/api/menu', { 
+                                            const res = await fetch(apiUrl('/api/menu'), { 
                                                 method: 'POST', 
                                                 headers: { 'Content-Type': 'application/json' }, 
                                                 body: JSON.stringify(newItem) 
@@ -1071,7 +1080,7 @@ export default function AdminDashboard() {
                             <h2 className="text-2xl font-bold text-foreground">All Orders</h2>
                             <button
                                 onClick={() => {
-                                    window.open('/api/admin/orders/export', '_blank');
+                                    window.open(apiUrl('/api/admin/orders/export'), '_blank');
                                 }}
                                 className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg font-bold transition-colors"
                             >
