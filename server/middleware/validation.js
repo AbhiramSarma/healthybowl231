@@ -5,6 +5,15 @@
 
 const { body, param, query, validationResult } = require('express-validator');
 
+// Middleware to normalize phone numbers after validation
+const normalizePhone = (req, res, next) => {
+  if (req.body && req.body.phone) {
+    // Normalize phone number (remove formatting, keep only digits)
+    req.body.phone = req.body.phone.replace(/[\s\-+()]/g, '');
+  }
+  next();
+};
+
 // Validation result handler
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
@@ -22,7 +31,8 @@ const handleValidationErrors = (req, res, next) => {
       requestId,
     });
   }
-  next();
+  // Normalize phone after validation passes
+  normalizePhone(req, res, next);
 };
 
 // Common validation rules
