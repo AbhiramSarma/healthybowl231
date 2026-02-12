@@ -84,12 +84,22 @@ const validators = {
     commonRules.password,
     commonRules.email,
     body('address').optional({ nullable: true, checkFalsy: true }).trim().isLength({ max: 500 }).withMessage('Address cannot exceed 500 characters'),
+    // Normalize phone number after validation
+    body('phone').customSanitizer((value) => {
+      if (!value) return value;
+      return value.replace(/[\s\-+()]/g, '');
+    }),
     handleValidationErrors,
   ],
   
   login: [
     commonRules.phone,
     commonRules.password,
+    // Normalize phone number after validation
+    body('phone').customSanitizer((value) => {
+      if (!value) return value;
+      return value.replace(/[\s\-+()]/g, '');
+    }),
     handleValidationErrors,
   ],
   

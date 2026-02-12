@@ -262,8 +262,11 @@ app.post('/api/auth/register', authLimiter, validators.register, async (req, res
     try {
         const { name, phone, email, password, address } = req.body;
 
+        // Normalize phone number (remove formatting, keep only digits)
+        const normalizedPhone = phone.replace(/[\s\-+()]/g, '');
+
         // Check if user already exists
-        const existingUser = await User.findOne({ phone });
+        const existingUser = await User.findOne({ phone: normalizedPhone });
         if (existingUser) {
             logAuthAttempt(req, false, 'Phone already exists');
             return res.status(400).json({ 
@@ -272,8 +275,8 @@ app.post('/api/auth/register', authLimiter, validators.register, async (req, res
             });
         }
 
-        // Create new user
-        const user = new User({ name, phone, email: email || '', password, address: address || '' });
+        // Create new user with normalized phone
+        const user = new User({ name, phone: normalizedPhone, email: email || '', password, address: address || '' });
         await user.save();
 
         // Generate short-lived access token
@@ -329,8 +332,11 @@ app.post('/api/auth/login', authLimiter, validators.login, async (req, res, next
     try {
         const { phone, password } = req.body;
 
+        // Normalize phone number (remove formatting, keep only digits)
+        const normalizedPhone = phone.replace(/[\s\-+()]/g, '');
+
         // Find user
-        const user = await User.findOne({ phone });
+        const user = await User.findOne({ phone: normalizedPhone });
         if (!user) {
             logAuthAttempt(req, false, 'User not found');
             return res.status(401).json({ 
