@@ -43,6 +43,26 @@ RAZORPAY_KEY_SECRET=your_razorpay_secret
 ```
 
 ## ☁️ Deployment
-For deployment instructions (Vercel + Render), please check:
-[Deployment Guide](./client/DEPLOYMENT.md) (or check the artifacts folder).
-"# kal_website" 
+
+Deploy your application to production:
+
+- **Frontend** → Vercel
+- **Backend** → Render  
+- **Database** → MongoDB Atlas
+
+### Quick Start
+See [QUICK_DEPLOY.md](./QUICK_DEPLOY.md) for a 15-minute deployment guide.
+
+### Detailed Guide
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for comprehensive step-by-step instructions.
+
+### Deployment Checklist
+Use [DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md) to ensure everything is configured correctly.
+
+---
+
+## 📚 Additional Documentation
+
+- [Deployment Guide](./DEPLOYMENT.md) - Complete deployment instructions
+- [Quick Deploy](./QUICK_DEPLOY.md) - Fast deployment guide
+- [Deployment Checklist](./DEPLOYMENT_CHECKLIST.md) - Step-by-step checklist 
