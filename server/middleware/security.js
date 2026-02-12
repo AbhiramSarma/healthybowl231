@@ -46,6 +46,16 @@ const corsOptions = {
       if (origin === allowed) return true;
       // Match with/without trailing slash
       if (origin === allowed.replace(/\/$/, '') || origin === allowed + '/') return true;
+      
+      // Special handling for Vercel preview URLs
+      // If main domain is healthybowl231.vercel.app, also allow preview URLs
+      if (allowed.includes('healthybowl231.vercel.app')) {
+        const vercelPreviewPattern = /^https:\/\/healthybowl231-[a-z0-9]+-abhiram-sarmas-projects\.vercel\.app$/;
+        if (vercelPreviewPattern.test(origin)) return true;
+        // Also allow any healthybowl231-*.vercel.app pattern
+        if (/^https:\/\/healthybowl231-.*\.vercel\.app$/.test(origin)) return true;
+      }
+      
       // Match wildcard subdomains (e.g., *.vercel.app)
       if (allowed.includes('*')) {
         const pattern = allowed.replace(/\*/g, '[^.]*').replace(/\./g, '\\.');
