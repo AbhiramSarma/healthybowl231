@@ -42,8 +42,9 @@ const io = new Server(httpServer, {
 });
 
 // Trust proxy - Required for Render and other hosting platforms behind load balancers
-// This allows Express to properly read X-Forwarded-For headers for rate limiting
-app.set('trust proxy', true);
+// Trust only the first proxy (Render's load balancer) to prevent IP spoofing
+// Setting to 1 means trust only the first proxy, not all proxies
+app.set('trust proxy', 1);
 
 // Security Middleware (order matters!)
 app.use(helmetConfig);

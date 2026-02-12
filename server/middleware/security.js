@@ -86,6 +86,10 @@ const generalLimiter = rateLimit({
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  // Trust proxy is configured in Express app, so we can safely use IP-based limiting
+  validate: {
+    trustProxy: false, // We handle proxy trust in Express, not here
+  },
   skip: (req) => {
     // Skip rate limiting for health checks
     return req.path === '/health' || req.path === '/api/health';
@@ -115,6 +119,9 @@ const paymentLimiter = rateLimit({
   message: 'Too many payment requests, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  validate: {
+    trustProxy: false, // We handle proxy trust in Express, not here
+  },
 });
 
 // Payload size limit middleware
