@@ -95,14 +95,19 @@ const generalLimiter = rateLimit({
 // Strict rate limiter for auth endpoints (login/register only)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 requests per windowMs
+  max: 20, // Limit each IP to 20 requests per windowMs (increased from 5 for production)
   message: 'Too many authentication attempts, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
-  skipSuccessfulRequests: true,
+  skipSuccessfulRequests: true, // Don't count successful logins against the limit
   skip: (req) => {
     // Skip rate limiting for refresh endpoint (uses general limiter instead)
     return req.path === '/api/auth/refresh';
+  },
+  // Use a more lenient key generator for production (consider user agent + IP)
+  keyGenerator: (req) => {
+    // In production, consider using user agent to differentiate clients behind same IP
+    return req.ip + (req.get('user-agent') || '');
   },
 });
 

@@ -208,7 +208,9 @@ const apiRequest = async (endpoint, options = {}) => {
   };
 
   // Apply retry strategy for idempotent requests or if explicitly enabled
-  if (retry && (isIdempotent(method) || retry === true)) {
+  // BUT: Never retry auth endpoints (login/register) to avoid rate limiting
+  const isAuthEndpoint = endpoint.includes('/api/auth/login') || endpoint.includes('/api/auth/register');
+  if (retry && !isAuthEndpoint && (isIdempotent(method) || retry === true)) {
     return retryRequest(makeRequest);
   }
 

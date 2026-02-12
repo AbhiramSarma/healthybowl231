@@ -29,6 +29,10 @@ export default function Login() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        
+        // Prevent double submission
+        if (loading) return;
+        
         setError('');
         setLoading(true);
 
@@ -51,7 +55,7 @@ export default function Login() {
                 setError(result.error || 'Authentication failed');
             }
         } catch (err) {
-            setError('An error occurred. Please try again.');
+            setError(err.message || 'An error occurred. Please try again.');
         } finally {
             setLoading(false);
         }
