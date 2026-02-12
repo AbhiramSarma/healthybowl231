@@ -26,8 +26,14 @@ const commonRules = {
   phone: body('phone')
     .trim()
     .notEmpty().withMessage('Phone number is required')
-    .isLength({ min: 10, max: 15 }).withMessage('Phone number must be between 10 and 15 digits')
-    .matches(/^[0-9]+$/).withMessage('Phone number must contain only digits'),
+    .custom((value) => {
+      // Remove common formatting characters
+      const cleaned = value.replace(/[\s\-+()]/g, '');
+      if (!/^[0-9]{10,15}$/.test(cleaned)) {
+        throw new Error('Phone number must be between 10 and 15 digits');
+      }
+      return true;
+    }),
   
   password: body('password')
     .trim()
@@ -70,11 +76,14 @@ const commonRules = {
 // Validation chains
 const validators = {
   register: [
-    commonRules.name,
+    body('name')
+      .trim()
+      .notEmpty().withMessage('Name is required')
+      .isLength({ min: 2, max: 100 }).withMessage('Name must be between 2 and 100 characters'),
     commonRules.phone,
     commonRules.password,
     commonRules.email,
-    body('address').optional().trim().isLength({ max: 500 }),
+    body('address').optional({ nullable: true, checkFalsy: true }).trim().isLength({ max: 500 }).withMessage('Address cannot exceed 500 characters'),
     handleValidationErrors,
   ],
   

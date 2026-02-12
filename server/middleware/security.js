@@ -104,11 +104,8 @@ const authLimiter = rateLimit({
     // Skip rate limiting for refresh endpoint (uses general limiter instead)
     return req.path === '/api/auth/refresh';
   },
-  // Use a more lenient key generator for production (consider user agent + IP)
-  keyGenerator: (req) => {
-    // In production, consider using user agent to differentiate clients behind same IP
-    return req.ip + (req.get('user-agent') || '');
-  },
+  // Use IP address for rate limiting (Express will handle X-Forwarded-For when trust proxy is enabled)
+  // Note: trust proxy must be enabled in Express app for this to work correctly
 });
 
 // Strict rate limiter for payment endpoints

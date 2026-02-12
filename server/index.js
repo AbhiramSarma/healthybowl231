@@ -41,6 +41,10 @@ const io = new Server(httpServer, {
     cors: corsOptions
 });
 
+// Trust proxy - Required for Render and other hosting platforms behind load balancers
+// This allows Express to properly read X-Forwarded-For headers for rate limiting
+app.set('trust proxy', true);
+
 // Security Middleware (order matters!)
 app.use(helmetConfig);
 app.use(requestIdMiddleware);
