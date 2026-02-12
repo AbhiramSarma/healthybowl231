@@ -635,7 +635,7 @@ const Ticket = require('./models/Ticket');
 // ...
 
 // Ticket Routes
-app.post('/api/tickets', async (req, res, next) => {
+app.post('/api/tickets', validators.createTicket, async (req, res, next) => {
     try {
         const ticket = new Ticket(req.body);
         await ticket.save();
@@ -669,7 +669,7 @@ app.get('/api/user/tickets', authenticateToken, async (req, res, next) => {
 });
 
 // Admin ticket updates (status / reply) - gated by admin password on frontend
-app.patch('/api/tickets/:id', validators.mongoIdParam, async (req, res, next) => {
+app.patch('/api/tickets/:id', validators.updateTicket, async (req, res, next) => {
     try {
         const { adminReply } = req.body;
         const ticket = await Ticket.findByIdAndUpdate(
@@ -764,7 +764,7 @@ app.post('/api/create-order-direct', validators.createOrder, async (req, res, ne
 });
 
 // Payment Route (Create Order)
-app.post('/api/create-order', async (req, res, next) => {
+app.post('/api/create-order', validators.createPaymentOrder, async (req, res, next) => {
     try {
         const { amount } = req.body;
         if (!amount || amount <= 0) {
@@ -789,7 +789,7 @@ app.post('/api/create-order', async (req, res, next) => {
 });
 
 // Verify Payment & Save Order (now supports guest orders)
-app.post('/api/verify-payment', async (req, res, next) => {
+app.post('/api/verify-payment', validators.verifyPayment, async (req, res, next) => {
     try {
         const { razorpay_order_id, razorpay_payment_id, razorpay_signature, orderDetails } = req.body;
         // Get userId from token if available, otherwise null for guest orders
