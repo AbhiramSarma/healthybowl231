@@ -10,9 +10,13 @@ const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     const requestId = req.headers['x-request-id'] || 'unknown';
+    // Get the first error message for better UX
+    const firstError = errors.array()[0];
+    const errorMessage = firstError?.msg || 'Invalid input data';
+    
     return res.status(400).json({
       success: false,
-      error: 'Validation Error',
+      error: errorMessage,
       message: 'Invalid input data',
       errors: errors.array(),
       requestId,
@@ -26,10 +30,14 @@ const commonRules = {
   phone: body('phone')
     .trim()
     .notEmpty().withMessage('Phone number is required')
+    .customSanitizer((value) => {
+      // Normalize phone number (remove formatting, keep only digits)
+      if (!value) return value;
+      return value.replace(/[\s\-+()]/g, '');
+    })
     .custom((value) => {
-      // Remove common formatting characters
-      const cleaned = value.replace(/[\s\-+()]/g, '');
-      if (!/^[0-9]{10,15}$/.test(cleaned)) {
+      // Validate normalized phone number
+      if (!/^[0-9]{10,15}$/.test(value)) {
         throw new Error('Phone number must be between 10 and 15 digits');
       }
       return true;
@@ -95,11 +103,6 @@ const validators = {
   login: [
     commonRules.phone,
     commonRules.password,
-    // Normalize phone number after validation
-    body('phone').customSanitizer((value) => {
-      if (!value) return value;
-      return value.replace(/[\s\-+()]/g, '');
-    }),
     handleValidationErrors,
   ],
   

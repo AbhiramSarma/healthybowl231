@@ -33,7 +33,14 @@ export const useAuthStore = create(
                         return { success: false, error: data.error || 'Login failed' };
                     }
                 } catch (error) {
-                    const errorMessage = error.message || 'Network error. Please try again.';
+                    // Extract error message from response data if available
+                    let errorMessage = error.message || 'Network error. Please try again.';
+                    if (error.data?.error) {
+                        errorMessage = error.data.error;
+                    } else if (error.data?.errors && Array.isArray(error.data.errors) && error.data.errors.length > 0) {
+                        // Show first validation error
+                        errorMessage = error.data.errors[0].msg || errorMessage;
+                    }
                     set({ loading: false, error: errorMessage });
                     return { success: false, error: errorMessage };
                 }
@@ -59,7 +66,14 @@ export const useAuthStore = create(
                         return { success: false, error: data.error || 'Registration failed' };
                     }
                 } catch (error) {
-                    const errorMessage = error.message || 'Network error. Please try again.';
+                    // Extract error message from response data if available
+                    let errorMessage = error.message || 'Network error. Please try again.';
+                    if (error.data?.error) {
+                        errorMessage = error.data.error;
+                    } else if (error.data?.errors && Array.isArray(error.data.errors) && error.data.errors.length > 0) {
+                        // Show first validation error
+                        errorMessage = error.data.errors[0].msg || errorMessage;
+                    }
                     set({ loading: false, error: errorMessage });
                     return { success: false, error: errorMessage };
                 }
