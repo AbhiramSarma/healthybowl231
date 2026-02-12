@@ -64,7 +64,7 @@ const commonRules = {
     .isLength({ min: 2, max: 100 }).withMessage('Name must be between 2 and 100 characters'),
   
   email: body('email')
-    .optional()
+    .optional({ nullable: true, checkFalsy: true })
     .trim()
     .isEmail().withMessage('Invalid email format')
     .normalizeEmail(),
