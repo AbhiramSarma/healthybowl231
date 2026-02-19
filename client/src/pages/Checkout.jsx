@@ -314,7 +314,7 @@ export default function Checkout() {
                                     <div className="space-y-6">
                                         <div className="p-6 bg-gray-50 dark:bg-background rounded-xl border border-gray-200 dark:border-white/5 text-center">
                                             <div className="w-48 h-48 bg-white mx-auto mb-4 p-2">
-                                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=mock@upi&pn=HealthyBowl&am=" + grandTotal alt="QR Code" />
+                                                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=mock@upi&pn=HealthyBowl&am=${grandTotal}`} alt="QR Code" />
                                             </div>
                                             <p className="text-sm text-gray-500 dark:text-gray-400">Scan to pay ₹{grandTotal} with Any UPI App</p>
                                         </div>
