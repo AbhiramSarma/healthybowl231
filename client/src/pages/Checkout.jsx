@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useCartStore } from '../features/cart/cartStore';
 import { useAuthStore } from '../features/auth/authStore';
 import { useNavigate } from 'react-router-dom';
-import { CreditCard, Smartphone, MapPin, User, Phone, Wallet, Trash2, ChevronRight, Banknote } from 'lucide-react';
+import { Smartphone, MapPin, User, Phone, Trash2, ChevronRight, Banknote } from 'lucide-react';
 import { cn } from '../lib/utils';
 import apiUrl from '../lib/apiUrl';
 
@@ -14,7 +14,7 @@ export default function Checkout() {
     const [step, setStep] = useState(1); // 1: Cart Items, 2: Delivery Details, 3: Payment
     const [form, setForm] = useState({ name: '', phone: '', address: '' });
     const [errors, setErrors] = useState({});
-    const [paymentMethod, setPaymentMethod] = useState('');
+    const [paymentMethod, setPaymentMethod] = useState('UPI');
     const [loading, setLoading] = useState(false);
     const [deliveryFee, setDeliveryFee] = useState(40);
 
@@ -309,42 +309,19 @@ export default function Checkout() {
                                     className="bg-surface border border-white/5 rounded-2xl p-6"
                                 >
                                     <h2 className="text-xl font-bold mb-6">Payment Method</h2>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                                        {['UPI', 'Card'].map((method) => (
-                                            <button
-                                                key={method}
-                                                onClick={() => setPaymentMethod(method)}
-                                                className={cn(
-                                                    "p-4 rounded-xl border flex flex-col items-center gap-3 transition-all",
-                                                    paymentMethod === method
-                                                        ? "bg-primary/10 border-primary text-primary"
-                                                        : "bg-gray-50 dark:bg-background border-gray-200 dark:border-white/5 hover:border-gray-300 dark:hover:border-white/20 text-foreground"
-                                                )}
-                                            >
-                                                {method === 'UPI' && <Smartphone size={32} />}
-                                                {method === 'Card' && <CreditCard size={32} />}
-                                                <span className="font-bold">{method}</span>
-                                            </button>
-                                        ))}
+                                    <div className="mb-8">
+                                        <div className="p-4 rounded-xl border flex flex-col items-center gap-3 bg-primary/10 border-primary text-primary max-w-xs">
+                                            <Smartphone size={32} />
+                                            <span className="font-bold">UPI</span>
+                                        </div>
                                     </div>
 
-                                    {paymentMethod === 'UPI' && (
-                                        <div className="mt-8 p-6 bg-gray-50 dark:bg-background rounded-xl border border-gray-200 dark:border-white/5 text-center">
-                                            <div className="w-48 h-48 bg-white mx-auto mb-4 p-2">
-                                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=mock@upi&pn=HealthyBowl" alt="QR Code" />
-                                            </div>
-                                            <p className="text-sm text-gray-500 dark:text-gray-400">Scan to pay with Any UPI App</p>
+                                    <div className="mt-8 p-6 bg-gray-50 dark:bg-background rounded-xl border border-gray-200 dark:border-white/5 text-center">
+                                        <div className="w-48 h-48 bg-white mx-auto mb-4 p-2">
+                                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=mock@upi&pn=HealthyBowl" alt="QR Code" />
                                         </div>
-                                    )}
-                                    {paymentMethod === 'Card' && (
-                                        <div className="mt-8 p-6 bg-gray-50 dark:bg-background rounded-xl border border-gray-200 dark:border-white/5 space-y-4 max-w-sm mx-auto">
-                                            <input type="text" placeholder="Card Number" className="w-full bg-white dark:bg-surface border border-gray-200 dark:border-white/10 rounded-lg px-4 py-3 text-foreground" />
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <input type="text" placeholder="MM/YY" className="w-full bg-white dark:bg-surface border border-gray-200 dark:border-white/10 rounded-lg px-4 py-3 text-foreground" />
-                                                <input type="password" placeholder="CVV" className="w-full bg-white dark:bg-surface border border-gray-200 dark:border-white/10 rounded-lg px-4 py-3 text-foreground" />
-                                            </div>
-                                        </div>
-                                    )}
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">Scan to pay with Any UPI App</p>
+                                    </div>
                                 </motion.div>
                             )}
                         </AnimatePresence>
