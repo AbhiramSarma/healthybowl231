@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Plus, Minus, ShoppingBag } from 'lucide-react';
-import { useCartStore } from '../features/cart/cartStore';
+import { useCartStore, getCartLineId } from '../features/cart/cartStore';
 import { MENU_IMAGE_OVERRIDES } from '../features/menu/imageOverrides';
 import { cn } from '../lib/utils';
 import apiUrl from '../lib/apiUrl';
@@ -72,13 +72,19 @@ export default function ProductDetail() {
 
   const imageSrc = item ? (MENU_IMAGE_OVERRIDES[item.name] ?? item.image) : '';
   const displayPrice = selectedOption ? selectedOption.price : item?.price;
-  const cartItem = item ? items.find((i) => i.id === item.id) : null;
-  const quantity = cartItem?.quantity ?? 0;
   const cartProduct = item ? {
     ...item,
     price: displayPrice,
     selectedOption: selectedOption?.label,
+    noGarlic: showCustomization ? noGarlic : false,
+    noOnion: showCustomization ? noOnion : false,
+    customInstructions: showCustomization ? customInstructions : '',
+    cookingRequests: isSweetItem ? cookingRequests : {},
+    cookingInstructions: isSweetItem ? cookingInstructions : ''
   } : null;
+  const cartItem = item && cartProduct ? items.find((i) => (i.cartLineId || getCartLineId(i)) === getCartLineId(cartProduct)) : null;
+  const quantity = cartItem?.quantity ?? 0;
+  const cartLineId = cartItem ? (cartItem.cartLineId || getCartLineId(cartItem)) : null;
 
   const handleAdd = () => {
     if (cartProduct) {
@@ -105,8 +111,9 @@ export default function ProductDetail() {
     addItem(productWithPreferences);
   };
   const handleDecrement = () => {
-    if (quantity > 1) updateQuantity(item.id, quantity - 1);
-    else removeItem(item.id);
+    if (!cartLineId) return;
+    if (quantity > 1) updateQuantity(cartLineId, quantity - 1);
+    else removeItem(cartLineId);
   };
 
   if (loading) {

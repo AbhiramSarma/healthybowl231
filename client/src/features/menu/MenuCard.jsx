@@ -1,17 +1,14 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Plus, Minus, ShoppingBag, XCircle } from 'lucide-react';
-import { useCartStore } from '../cart/cartStore';
+import { Plus, Minus, ShoppingBag, XCircle, Edit3 } from 'lucide-react';
+import { useCartStore, getCartLineId } from '../cart/cartStore';
 import { cn } from '../../lib/utils';
 import { MENU_IMAGE_OVERRIDES } from './imageOverrides';
 
 export default function MenuCard({ item }) {
     const { items, addItem, removeItem, updateQuantity, updateItemOption } = useCartStore();
-
-    const cartItem = items.find((i) => i.id === item.id);
-    const quantity = cartItem ? cartItem.quantity : 0;
-    const isAvailable = item.isAvailable !== false; // Default to true if not specified
+    const isAvailable = item.isAvailable !== false;
 
     const priceOptions = item.priceOptions || [];
     const hasOptions = priceOptions.length > 0;
@@ -51,28 +48,8 @@ export default function MenuCard({ item }) {
     // Show customization for all items except sweets and gift packs
     const showCustomization = !isSweetItem && !isGiftPack;
 
-    useEffect(() => {
-        if (hasOptions && defaultOption) setSelectedOption(defaultOption);
-    }, [item.id, hasOptions]);
-
-    const currentOption = quantity > 0 && cartItem?.selectedOption
-        ? priceOptions.find((o) => o.label === cartItem.selectedOption) || defaultOption
-        : selectedOption;
-
-    const handleOptionChange = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const label = e.target.value;
-        const opt = priceOptions.find((o) => o.label === label);
-        if (!opt) return;
-        if (quantity > 0) {
-            updateItemOption(item.id, opt.label, opt.price);
-        } else {
-            setSelectedOption(opt);
-        }
-    };
-
-    const toAddWithOption = () => {
+    // Build product from current form state (for matching cart line)
+    const buildProductFromForm = (optOverride) => {
         const baseItem = {
             ...item,
             noGarlic: showCustomization ? noGarlic : false,
@@ -81,16 +58,49 @@ export default function MenuCard({ item }) {
             cookingRequests: isSweetItem ? cookingRequests : {},
             cookingInstructions: isSweetItem ? cookingInstructions : ''
         };
-        
-        if (!hasOptions) {
-            return baseItem;
+        if (!hasOptions) return baseItem;
+        const opt = optOverride || selectedOption || defaultOption;
+        return { ...baseItem, price: opt?.price ?? item.price, selectedOption: opt?.label };
+    };
+
+    const currentProduct = buildProductFromForm();
+    const cartItem = items.find((i) => (i.cartLineId || getCartLineId(i)) === getCartLineId(currentProduct));
+    const quantity = cartItem ? cartItem.quantity : 0;
+    const cartLineId = cartItem ? (cartItem.cartLineId || getCartLineId(cartItem)) : null;
+    const totalQtyForProduct = items.filter((i) => i.id === item.id).reduce((s, i) => s + i.quantity, 0);
+    const currentOption = quantity > 0 && cartItem?.selectedOption
+        ? priceOptions.find((o) => o.label === cartItem.selectedOption) || defaultOption
+        : selectedOption;
+
+    useEffect(() => {
+        if (hasOptions && defaultOption) setSelectedOption(defaultOption);
+    }, [item.id, hasOptions]);
+
+    const toAddWithOption = () => {
+        const opt = quantity > 0 ? (priceOptions.find((o) => o.label === cartItem?.selectedOption) || defaultOption) : (selectedOption || defaultOption);
+        return buildProductFromForm(opt);
+    };
+
+    const handleOptionChange = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const label = e.target.value;
+        const opt = priceOptions.find((o) => o.label === label);
+        if (!opt) return;
+        if (quantity > 0 && cartLineId) {
+            updateItemOption(cartLineId, opt.label, opt.price);
+        } else {
+            setSelectedOption(opt);
         }
-        const opt = quantity > 0 ? (priceOptions.find((o) => o.label === cartItem?.selectedOption) || defaultOption) : currentOption;
-        return {
-            ...baseItem,
-            price: opt.price,
-            selectedOption: opt.label
-        };
+    };
+
+    const handleCustomize = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setShowHotOptions(true);
+        setNoGarlic(false);
+        setNoOnion(false);
+        setCustomInstructions('');
     };
 
     const handleCreate = (e) => {
@@ -111,10 +121,11 @@ export default function MenuCard({ item }) {
 
     const decrement = (e) => {
         e.stopPropagation();
+        if (!cartLineId) return;
         if (quantity > 1) {
-            updateQuantity(item.id, quantity - 1);
+            updateQuantity(cartLineId, quantity - 1);
         } else {
-            removeItem(item.id);
+            removeItem(cartLineId);
         }
     };
 
@@ -125,7 +136,7 @@ export default function MenuCard({ item }) {
             layout
             className={cn(
                 "rounded-3xl overflow-hidden group relative transition-all duration-500 flex flex-col h-full",
-                quantity > 0
+                totalQtyForProduct > 0
                     ? "bg-white dark:bg-surface shadow-[0_10px_40px_-10px_rgba(255,69,0,0.3)] ring-1 ring-primary transform -translate-y-2 scale-[1.02] border border-gray-100 dark:border-white/5"
                     : "bg-white dark:bg-white/5 border border-gray-100 dark:border-white/5 hover:shadow-xl hover:-translate-y-1 dark:hover:border-primary/30 dark:hover:shadow-primary/10"
             )}
@@ -136,21 +147,21 @@ export default function MenuCard({ item }) {
                     alt={item.name}
                     className={cn(
                         "w-full h-full object-cover transition-transform duration-700 will-change-transform",
-                        quantity > 0 ? "scale-110 saturate-150" : "group-hover:scale-110 group-hover:saturate-150"
+                        totalQtyForProduct > 0 ? "scale-110 saturate-150" : "group-hover:scale-110 group-hover:saturate-150"
                     )}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent dark:from-black/40 dark:via-background/20" />
 
                 <div className="absolute top-4 right-4 z-10">
                     <AnimatePresence>
-                        {quantity > 0 && (
+                        {totalQtyForProduct > 0 && (
                             <motion.div
                                 initial={{ scale: 0, rotate: -20 }}
                                 animate={{ scale: 1, rotate: 0 }}
                                 exit={{ scale: 0 }}
                                 className="bg-gradient-to-r from-primary to-accent text-background text-xs font-black px-4 py-1.5 rounded-full flex items-center gap-1 shadow-lg shadow-primary/40"
                             >
-                                <ShoppingBag size={14} fill="currentColor" /> {quantity} IN CART
+                                <ShoppingBag size={14} fill="currentColor" /> {totalQtyForProduct} IN CART
                             </motion.div>
                         )}
                     </AnimatePresence>
@@ -304,7 +315,7 @@ export default function MenuCard({ item }) {
                             onClick={(e) => e.stopPropagation()}
                             className={cn(
                                 "w-full py-2.5 pl-3 pr-8 rounded-lg text-sm font-medium border bg-white dark:bg-black/30 border-gray-200 dark:border-white/10 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none appearance-none cursor-pointer",
-                                quantity > 0 && "border-primary/50 bg-primary/5 dark:bg-primary/10"
+                                totalQtyForProduct > 0 && "border-primary/50 bg-primary/5 dark:bg-primary/10"
                             )}
                             style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1.25rem' }}
                         >
@@ -342,27 +353,36 @@ export default function MenuCard({ item }) {
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0 }}
-                                className="flex items-center justify-between bg-gray-100 dark:bg-black/40 backdrop-blur-md border border-primary/50 rounded-xl p-1.5"
+                                className="space-y-2"
                             >
+                                <div className="flex items-center justify-between bg-gray-100 dark:bg-black/40 backdrop-blur-md border border-primary/50 rounded-xl p-1.5">
+                                    <button
+                                        onClick={decrement}
+                                        className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition-colors active:scale-90"
+                                    >
+                                        <Minus size={20} />
+                                    </button>
+                                    <motion.div
+                                        key={quantity}
+                                        initial={{ scale: 1.5 }}
+                                        animate={{ scale: 1 }}
+                                        className="font-black text-xl text-primary w-8 text-center"
+                                    >
+                                        {quantity}
+                                    </motion.div>
+                                    <button
+                                        onClick={increment}
+                                        title="Repeat - add another"
+                                        className="w-10 h-10 flex items-center justify-center bg-primary text-background rounded-lg hover:bg-accent transition-colors active:scale-90 shadow-lg shadow-primary/20"
+                                    >
+                                        <Plus size={20} />
+                                    </button>
+                                </div>
                                 <button
-                                    onClick={decrement}
-                                    className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition-colors active:scale-90"
+                                    onClick={handleCustomize}
+                                    className="w-full flex items-center justify-center gap-2 py-2 text-xs font-medium text-primary hover:bg-primary/10 rounded-lg transition-colors border border-primary/30"
                                 >
-                                    <Minus size={20} />
-                                </button>
-                                <motion.div
-                                    key={quantity}
-                                    initial={{ scale: 1.5 }}
-                                    animate={{ scale: 1 }}
-                                    className="font-black text-xl text-primary w-8 text-center"
-                                >
-                                    {quantity}
-                                </motion.div>
-                                <button
-                                    onClick={increment}
-                                    className="w-10 h-10 flex items-center justify-center bg-primary text-background rounded-lg hover:bg-accent transition-colors active:scale-90 shadow-lg shadow-primary/20"
-                                >
-                                    <Plus size={20} />
+                                    <Edit3 size={14} /> Customize (add with different options)
                                 </button>
                             </motion.div>
                         )}

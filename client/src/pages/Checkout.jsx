@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useCartStore } from '../features/cart/cartStore';
+import { useCartStore, getCartLineId } from '../features/cart/cartStore';
 import { useAuthStore } from '../features/auth/authStore';
 import { useNavigate } from 'react-router-dom';
 import { Smartphone, MapPin, User, Phone, Trash2, ChevronRight, Banknote, Upload } from 'lucide-react';
@@ -182,8 +182,10 @@ export default function Checkout() {
                                     <div className="p-6">
                                         <h2 className="text-xl font-bold mb-6">Your Items</h2>
                                         <div className="space-y-6">
-                                            {items.map((item) => (
-                                                <div key={item.id} className="space-y-3">
+                                            {items.map((item) => {
+                                                const lineId = item.cartLineId || getCartLineId(item);
+                                                return (
+                                                <div key={lineId} className="space-y-3">
                                                     <div className="flex gap-4 items-center">
                                                         <img src={item.image} alt={item.name} className="w-20 h-20 rounded-lg object-cover" />
                                                         <div className="flex-1">
@@ -191,11 +193,11 @@ export default function Checkout() {
                                                             <p className="text-primary text-sm font-bold">₹{item.price}</p>
                                                         </div>
                                                         <div className="flex items-center gap-3 bg-background/50 rounded-lg p-1">
-                                                            <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="w-8 h-8 flex items-center justify-center hover:text-primary transition-colors">-</button>
+                                                            <button onClick={() => updateQuantity(lineId, item.quantity - 1)} className="w-8 h-8 flex items-center justify-center hover:text-primary transition-colors">-</button>
                                                             <span className="font-bold w-4 text-center text-foreground">{item.quantity}</span>
-                                                            <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="w-8 h-8 flex items-center justify-center hover:text-primary transition-colors">+</button>
+                                                            <button onClick={() => updateQuantity(lineId, item.quantity + 1)} className="w-8 h-8 flex items-center justify-center hover:text-primary transition-colors">+</button>
                                                         </div>
-                                                        <button onClick={() => removeItem(item.id)} className="p-2 text-gray-500 hover:text-red-500 transition-colors">
+                                                        <button onClick={() => removeItem(lineId)} className="p-2 text-gray-500 hover:text-red-500 transition-colors">
                                                             <Trash2 size={20} />
                                                         </button>
                                                     </div>
@@ -231,7 +233,8 @@ export default function Checkout() {
                                                         </div>
                                                     )}
                                                 </div>
-                                            ))}
+                                            );
+                                            })}
                                         </div>
                                     </div>
                                 </motion.div>
