@@ -271,18 +271,18 @@ export default function ProductDetail() {
                 <button
                   onClick={handleAdd}
                   disabled={item.isAvailable === false}
-                  className="flex items-center gap-2 bg-primary text-white px-8 py-3 rounded-full font-bold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/25 disabled:opacity-50"
+                  className="flex items-center gap-2 bg-gradient-to-r from-primary to-accent text-white px-8 py-3 rounded-full font-bold hover:shadow-lg hover:shadow-primary/30 transition-all duration-200 disabled:opacity-50"
                 >
                   <Plus size={20} /> Add to Cart
                 </button>
               ) : (
-                <div className="flex items-center gap-3 bg-gray-100 dark:bg-surface border border-gray-200 dark:border-white/10 rounded-xl p-2">
-                  <button onClick={handleDecrement} className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 dark:hover:bg-white/10 text-foreground">
-                    <Minus size={20} />
+                <div className="flex items-center gap-3 bg-gray-100/80 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-2">
+                  <button onClick={handleDecrement} className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-primary/10 dark:hover:bg-primary/20 text-foreground hover:text-primary transition-all active:scale-95">
+                    <Minus size={20} strokeWidth={2.5} />
                   </button>
-                  <span className="font-bold text-lg w-8 text-center text-foreground">{quantity}</span>
-                  <button onClick={handleIncrement} className="w-10 h-10 flex items-center justify-center rounded-lg bg-primary text-background">
-                    <Plus size={20} />
+                  <span className="font-bold text-xl min-w-[2rem] text-center text-primary">{quantity}</span>
+                  <button onClick={handleIncrement} className="w-11 h-11 flex items-center justify-center rounded-xl bg-gradient-to-r from-primary to-accent text-white hover:shadow-lg hover:shadow-primary/30 transition-all active:scale-95">
+                    <Plus size={20} strokeWidth={2.5} />
                   </button>
                 </div>
               )}

@@ -280,15 +280,15 @@ export default function Menu() {
             <div className="flex items-center gap-2 sm:gap-4 flex-wrap justify-end">
               <Link
                 to="/checkout"
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary/20 text-primary border border-primary/50 font-bold hover:bg-primary/30 transition-colors"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary/10 text-primary border-2 border-primary/40 font-bold hover:bg-primary/20 hover:border-primary/60 hover:shadow-lg hover:shadow-primary/20 transition-all duration-200"
               >
-                <ShoppingBag size={18} /> View Cart {itemCount > 0 && `(${itemCount})`}
+                <ShoppingBag size={18} strokeWidth={2} /> View Cart {itemCount > 0 && `(${itemCount})`}
               </Link>
               <Link
                 to="/checkout"
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary text-background font-bold hover:bg-accent transition-colors"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-primary to-accent text-white font-bold hover:shadow-lg hover:shadow-primary/30 transition-all duration-200"
               >
-                Checkout <ChevronRight size={18} />
+                Checkout <ChevronRight size={18} strokeWidth={2.5} />
               </Link>
               <button
                 type="button"

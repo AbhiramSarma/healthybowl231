@@ -344,9 +344,9 @@ export default function MenuCard({ item }) {
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
                                 onClick={handleCreate}
-                                className="w-full py-3 rounded-xl font-bold text-white bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2 text-sm"
+                                className="w-full py-3.5 rounded-xl font-bold text-white bg-gradient-to-r from-primary to-accent hover:from-primary/95 hover:to-accent/95 shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 transition-all duration-300 flex items-center justify-center gap-2 text-sm tracking-wide"
                             >
-                                <Plus size={18} /> Add to Cart
+                                <Plus size={18} strokeWidth={2.5} /> Add to Cart
                             </motion.button>
                         ) : (
                             <motion.div
@@ -355,34 +355,34 @@ export default function MenuCard({ item }) {
                                 exit={{ opacity: 0 }}
                                 className="space-y-2"
                             >
-                                <div className="flex items-center justify-between bg-gray-100 dark:bg-black/40 backdrop-blur-md border border-primary/50 rounded-xl p-1.5">
+                                <div className="flex items-center justify-between bg-gray-100/80 dark:bg-white/5 backdrop-blur-md border border-gray-200 dark:border-white/10 rounded-xl p-2 gap-1">
                                     <button
                                         onClick={decrement}
-                                        className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition-colors active:scale-90"
+                                        className="w-11 h-11 flex items-center justify-center rounded-xl text-gray-600 dark:text-gray-300 hover:text-primary hover:bg-primary/10 dark:hover:bg-primary/20 transition-all duration-200 active:scale-95"
                                     >
-                                        <Minus size={20} />
+                                        <Minus size={20} strokeWidth={2.5} />
                                     </button>
                                     <motion.div
                                         key={quantity}
                                         initial={{ scale: 1.5 }}
                                         animate={{ scale: 1 }}
-                                        className="font-black text-xl text-primary w-8 text-center"
+                                        className="font-black text-xl text-primary min-w-[2rem] text-center"
                                     >
                                         {quantity}
                                     </motion.div>
                                     <button
                                         onClick={increment}
                                         title="Repeat - add another"
-                                        className="w-10 h-10 flex items-center justify-center bg-primary text-background rounded-lg hover:bg-accent transition-colors active:scale-90 shadow-lg shadow-primary/20"
+                                        className="w-11 h-11 flex items-center justify-center rounded-xl bg-gradient-to-r from-primary to-accent text-white hover:shadow-lg hover:shadow-primary/30 transition-all duration-200 active:scale-95"
                                     >
-                                        <Plus size={20} />
+                                        <Plus size={20} strokeWidth={2.5} />
                                     </button>
                                 </div>
                                 <button
                                     onClick={handleCustomize}
-                                    className="w-full flex items-center justify-center gap-2 py-2 text-xs font-medium text-primary hover:bg-primary/10 rounded-lg transition-colors border border-primary/30"
+                                    className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-primary hover:text-white hover:bg-primary/20 dark:hover:bg-primary/30 rounded-xl border-2 border-dashed border-primary/40 hover:border-primary/60 transition-all duration-200"
                                 >
-                                    <Edit3 size={14} /> Customize (add with different options)
+                                    <Edit3 size={16} strokeWidth={2} /> Customize (add with different options)
                                 </button>
                             </motion.div>
                         )}
