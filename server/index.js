@@ -651,6 +651,7 @@ app.delete('/api/menu/:id', async (req, res, next) => {
 
 const Order = require('./models/Order');
 const crypto = require('crypto');
+const { sendOrderNotification } = require('./utils/telegram');
 
 const Ticket = require('./models/Ticket');
 
@@ -769,6 +770,7 @@ app.post('/api/create-order-direct', validators.createOrder, async (req, res, ne
 
         // Emit Socket Event for Real-time Tracking
         io.emit('new_order', newOrder);
+        sendOrderNotification(newOrder).catch(() => {});
 
         logPayment(req, orderId, totalAmount, 'created', null);
         
@@ -835,6 +837,7 @@ app.post('/api/create-order-upi', uploadScreenshot.single('screenshot'), async (
 
         await newOrder.save();
         io.emit('new_order', newOrder);
+        sendOrderNotification(newOrder).catch(() => {});
         logPayment(req, orderId, totalAmount, 'upi_screenshot_submitted', null);
 
         res.json({
@@ -920,6 +923,7 @@ app.post('/api/verify-payment', validators.verifyPayment, async (req, res, next)
 
             // Emit Socket Event for Real-time Tracking
             io.emit('new_order', newOrder);
+            sendOrderNotification(newOrder).catch(() => {});
 
             logPayment(req, orderId, orderDetails.totalAmount, 'verified', razorpay_payment_id);
 
