@@ -49,11 +49,11 @@ export default function Navbar() {
             className={cn(
                 'fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b',
                 scrolled
-                    ? 'bg-white/95 dark:bg-black/60 backdrop-blur-xl border-gray-200 dark:border-white/10 py-3 shadow-md dark:shadow-[0_4px_30px_rgba(0,0,0,0.5)]'
+                    ? 'h-16 bg-white/95 dark:bg-black/60 backdrop-blur-xl border-gray-200 dark:border-white/10 shadow-md dark:shadow-[0_4px_30px_rgba(0,0,0,0.5)]'
                     : 'bg-transparent border-transparent py-5'
             )}
         >
-            <div className="container mx-auto px-4 flex items-center justify-between">
+            <div className="container mx-auto px-4 h-full flex items-center justify-between">
                 <Link to="/" className="text-2xl font-serif font-bold text-primary flex items-center gap-2">
                     Healthy Bowl
                 </Link>

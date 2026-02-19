@@ -182,8 +182,8 @@ export default function Menu() {
         </div>
       </div>
 
-      {/* Filters bar */}
-      <div className="sticky top-16 md:top-20 z-40 bg-white/90 dark:bg-background/95 backdrop-blur-md border-b border-gray-100 dark:border-white/5 py-3 md:py-4 shadow-sm">
+      {/* Filters bar - top-16 matches navbar height (64px) when scrolled */}
+      <div className="sticky top-16 z-40 bg-white/90 dark:bg-background/95 backdrop-blur-md border-b border-gray-100 dark:border-white/5 py-3 md:py-4 shadow-sm">
         <div className="container mx-auto px-3 sm:px-4 flex flex-col gap-3 md:gap-4">
           <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 md:gap-4">
             {/* Category chips – horizontally scrollable on mobile */}
