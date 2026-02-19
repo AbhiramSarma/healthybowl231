@@ -36,7 +36,7 @@ const sendOrderNotification = async (order) => {
             `💰 Total: ₹${order.totalAmount}`,
             `💳 Payment: ${order.paymentMethod || 'N/A'} (${order.status || 'N/A'})`,
             '',
-            `🔗 Track: ${frontendUrl}/track-order?orderId=${order._id}`,
+            `🔗 Admin: ${frontendUrl}/admin/dashboard`,
         ].join('\n');
 
         const url = `https://api.telegram.org/bot${token}/sendMessage`;
