@@ -56,10 +56,11 @@ const orderSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['received', 'preparing', 'out_for_delivery', 'delivered'],
+        enum: ['awaiting_confirmation', 'received', 'preparing', 'out_for_delivery', 'delivered'],
         default: 'received',
         index: true
     },
+    paymentScreenshot: { type: String }, // URL/path to uploaded payment screenshot (for UPI)
     createdAt: { type: Date, default: Date.now, index: true }
 }, {
     timestamps: true

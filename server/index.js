@@ -5,6 +5,8 @@ const cors = require('cors');
 const compression = require('compression');
 const cookieParser = require('cookie-parser');
 const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const Razorpay = require('razorpay');
@@ -66,12 +68,25 @@ app.use('/api/', generalLimiter);
 // to avoid rate-limiting refresh token endpoint
 app.use('/api/create-order', paymentLimiter);
 app.use('/api/verify-payment', paymentLimiter);
+app.use('/api/create-order-upi', paymentLimiter);
 
 // Serve local website images (dev/prod)
 app.use(
     '/website menu images',
     express.static(path.join(__dirname, '..', 'website menu images'))
 );
+
+// Ensure uploads directory exists for payment screenshots
+const uploadsDir = path.join(__dirname, 'uploads', 'payment-screenshots');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, uploadsDir),
+    filename: (req, file, cb) => cb(null, `screenshot_${Date.now()}_${Math.random().toString(36).slice(2)}${path.extname(file.originalname) || '.png'}`)
+});
+const uploadScreenshot = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB max
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Database Connection with options
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/spice_route";
@@ -766,6 +781,71 @@ app.post('/api/create-order-direct', validators.createOrder, async (req, res, ne
         });
     } catch (error) {
         logError(req, error, { action: 'create_order_direct' });
+        next(error);
+    }
+});
+
+// UPI Order with Payment Screenshot (awaiting admin confirmation)
+app.post('/api/create-order-upi', uploadScreenshot.single('screenshot'), async (req, res, next) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: "Payment screenshot is required" });
+        }
+        let customer, items, totalAmount;
+        try {
+            customer = typeof req.body.customer === 'string' ? JSON.parse(req.body.customer) : req.body.customer;
+            items = typeof req.body.items === 'string' ? JSON.parse(req.body.items) : req.body.items;
+            totalAmount = typeof req.body.totalAmount === 'string' ? parseFloat(req.body.totalAmount) : Number(req.body.totalAmount);
+        } catch (e) {
+            return res.status(400).json({ success: false, message: "Invalid order data" });
+        }
+        if (!customer || !customer.name || !customer.phone || !customer.address) {
+            return res.status(400).json({ success: false, message: "Missing customer details" });
+        }
+        if (!items || items.length === 0) {
+            return res.status(400).json({ success: false, message: "No items in order" });
+        }
+        if (!totalAmount || totalAmount <= 0) {
+            return res.status(400).json({ success: false, message: "Invalid total amount" });
+        }
+
+        let userId = null;
+        const token = req.headers.authorization?.split(' ')[1];
+        if (token) {
+            try {
+                const decoded = jwt.verify(token, JWT_SECRET);
+                userId = decoded.userId;
+            } catch (e) { /* guest order */ }
+        }
+
+        const orderId = 'ORD' + Date.now() + Math.random().toString(36).substr(2, 9).toUpperCase();
+        const screenshotUrl = '/uploads/payment-screenshots/' + req.file.filename;
+
+        const newOrder = new Order({
+            userId: userId || undefined,
+            customer,
+            items,
+            totalAmount,
+            paymentId: 'UPI_SCREENSHOT_' + Date.now(),
+            paymentMethod: 'UPI',
+            orderId,
+            status: 'awaiting_confirmation',
+            paymentScreenshot: screenshotUrl
+        });
+
+        await newOrder.save();
+        io.emit('new_order', newOrder);
+        logPayment(req, orderId, totalAmount, 'upi_screenshot_submitted', null);
+
+        res.json({
+            success: true,
+            message: "Order submitted. Awaiting payment confirmation from admin.",
+            orderId: newOrder._id,
+            orderNumber: orderId,
+            redirectUrl: `/track-order?orderId=${newOrder._id}`
+        });
+    } catch (error) {
+        logError(req, error, { action: 'create_order_upi' });
         next(error);
     }
 });

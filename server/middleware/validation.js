@@ -87,7 +87,7 @@ const commonRules = {
     .isLength({ min: 1, max: 50 }).withMessage('Category must be between 1 and 50 characters'),
   
   status: body('status')
-    .isIn(['received', 'preparing', 'out_for_delivery', 'delivered', 'Open', 'Resolved'])
+    .isIn(['awaiting_confirmation', 'received', 'preparing', 'out_for_delivery', 'delivered', 'Open', 'Resolved'])
     .withMessage('Invalid status value'),
 };
 

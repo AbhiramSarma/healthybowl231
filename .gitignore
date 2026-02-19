@@ -29,6 +29,9 @@ Thumbs.db
 coverage/
 .nyc_output/
 
+# Uploaded payment screenshots
+server/uploads/
+
 # Misc
 *.pem
 *.key

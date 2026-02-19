@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Edit2, Save, Trash, Plus, MessageSquare, CheckCircle, ArrowUp, ArrowDown, X, Trash2, Download } from 'lucide-react';
+import { Edit2, Save, Trash, Plus, MessageSquare, CheckCircle, ArrowUp, ArrowDown, X, Trash2, Download, Check } from 'lucide-react';
 import { io } from 'socket.io-client';
 import ThemeToggle from '../components/ThemeToggle';
 
@@ -1093,10 +1093,11 @@ export default function AdminDashboard() {
                             <div key={order._id} className="bg-surface p-6 rounded-xl border border-gray-200 dark:border-white/5 relative overflow-hidden">
                                 <div className="absolute top-0 right-0 p-4">
                                     <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${order.status === 'delivered' ? 'bg-green-500/20 text-green-600 dark:text-green-500' :
+                                        order.status === 'awaiting_confirmation' ? 'bg-amber-500/20 text-amber-600 dark:text-amber-500' :
                                         order.status === 'received' ? 'bg-blue-500/20 text-blue-600 dark:text-blue-500' :
                                             'bg-yellow-500/20 text-yellow-600 dark:text-yellow-500'
                                         }`}>
-                                        {order.status.replace('_', ' ')}
+                                        {order.status.replace(/_/g, ' ')}
                                     </span>
                                 </div>
 
@@ -1127,7 +1128,25 @@ export default function AdminDashboard() {
                                     </div>
                                 </div>
 
+                                {order.status === 'awaiting_confirmation' && order.paymentScreenshot && (
+                                    <div className="mb-6 p-4 bg-amber-500/5 border border-amber-500/30 rounded-lg">
+                                        <h4 className="text-sm font-bold text-amber-600 dark:text-amber-500 mb-2">Payment Screenshot</h4>
+                                        <a href={apiUrl(order.paymentScreenshot)} target="_blank" rel="noopener noreferrer" className="block">
+                                            <img src={apiUrl(order.paymentScreenshot)} alt="Payment screenshot" className="max-w-xs max-h-48 rounded-lg border border-gray-200 dark:border-white/10 object-contain cursor-pointer hover:opacity-90" />
+                                        </a>
+                                        <p className="text-xs text-gray-500 mt-2">Click image to view full size. Verify payment before confirming.</p>
+                                    </div>
+                                )}
+
                                 <div className="flex gap-2 flex-wrap">
+                                    {order.status === 'awaiting_confirmation' && (
+                                        <button
+                                            onClick={() => updateOrderStatus(order._id, 'received')}
+                                            className="bg-green-600 hover:bg-green-500 text-white border border-green-500 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
+                                        >
+                                            <Check size={16} /> Order Confirmed
+                                        </button>
+                                    )}
                                     {order.status === 'received' && (
                                         <button
                                             onClick={() => updateOrderStatus(order._id, 'preparing')}

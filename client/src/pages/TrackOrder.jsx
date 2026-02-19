@@ -18,7 +18,8 @@ export default function TrackOrder() {
     const [statusIndex, setStatusIndex] = useState(0);
 
     const steps = [
-        { icon: <Package />, label: 'Order Received', value: 'received' },
+        { icon: <Package />, label: 'Payment Received', value: 'awaiting_confirmation', altLabel: 'Awaiting Confirmation' },
+        { icon: <Package />, label: 'Order Confirmed', value: 'received' },
         { icon: <ChefHat />, label: 'Preparing', value: 'preparing' },
         { icon: <Truck />, label: 'Out for Delivery', value: 'out_for_delivery' },
         { icon: <MapPin />, label: 'Delivered', value: 'delivered' }
@@ -57,6 +58,9 @@ export default function TrackOrder() {
         const index = steps.findIndex(s => s.value === status);
         if (index !== -1) setStatusIndex(index);
     };
+
+    // When awaiting_confirmation, only show first step; hide subsequent steps until confirmed
+    const isAwaitingConfirmation = order?.status === 'awaiting_confirmation';
 
     if (!orderId) return <div className="min-h-screen pt-32 text-center text-foreground">No Order ID provided.</div>;
     if (!order) return <div className="min-h-screen pt-32 text-center text-foreground">Loading order details...</div>;
@@ -120,48 +124,70 @@ export default function TrackOrder() {
 
                 <div className="bg-surface border border-gray-200 dark:border-white/5 rounded-2xl p-8 relative overflow-hidden">
                     <h2 className="text-xl font-bold text-foreground mb-6">Order Status</h2>
-                    {/* Progress Bar Line */}
-                    <div className="absolute left-8 md:left-12 top-24 bottom-12 w-1 bg-gray-200 dark:bg-white/10">
-                        <motion.div
-                            className="w-full bg-primary"
-                            animate={{ height: `${(statusIndex / (steps.length - 1)) * 100}%` }}
-                            transition={{ duration: 1 }}
-                        />
-                    </div>
-
-                    <div className="space-y-12 relative">
-                        {steps.map((step, idx) => {
-                            const isActive = idx <= statusIndex;
-                            const isCurrent = idx === statusIndex;
-
-                            return (
-                                <div key={idx} className="flex items-center gap-6 md:gap-8">
-                                    <div className={cn(
-                                        "relative z-10 w-12 h-12 md:w-16 md:h-16 rounded-full flex items-center justify-center border-4 transition-all duration-500",
-                                        isActive
-                                            ? "bg-primary border-primary/20 text-background"
-                                            : "bg-gray-50 dark:bg-background border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-400"
-                                    )}>
-                                        {isActive ? step.icon : <div className="w-3 h-3 bg-gray-600 rounded-full" />}
-
-                                        {isCurrent && (
-                                            <span className="absolute inset-0 rounded-full animate-ping bg-primary/30" />
-                                        )}
-                                    </div>
-
-                                    <div className={cn(
-                                        "transition-all duration-500",
-                                        isActive ? "opacity-100" : "opacity-30"
-                                    )}>
-                                        <h3 className="text-lg md:text-xl font-bold text-foreground">{step.label}</h3>
-                                        <p className="text-sm text-gray-500">
-                                            {isCurrent ? 'Current Status' : idx < statusIndex ? 'Completed' : 'Pending'}
-                                        </p>
-                                    </div>
+                    {isAwaitingConfirmation ? (
+                        <div className="py-8">
+                            <div className="flex items-center gap-6 md:gap-8">
+                                <div className="relative z-10 w-12 h-12 md:w-16 md:h-16 rounded-full flex items-center justify-center border-4 bg-primary border-primary/20 text-background">
+                                    <Package />
+                                    <span className="absolute inset-0 rounded-full animate-ping bg-primary/30" />
                                 </div>
-                            );
-                        })}
-                    </div>
+                                <div>
+                                    <h3 className="text-lg md:text-xl font-bold text-foreground">Payment Received</h3>
+                                    <p className="text-amber-600 dark:text-amber-500 font-medium">Awaiting confirmation from restaurant</p>
+                                    <p className="text-sm text-gray-500 mt-1">Your payment screenshot has been submitted. The restaurant will verify and confirm your order shortly.</p>
+                                </div>
+                            </div>
+                            <div className="mt-8 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                                <p className="text-sm text-amber-700 dark:text-amber-400">Next steps (preparing, out for delivery, delivered) will appear once your order is confirmed.</p>
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            {/* Progress Bar Line */}
+                            <div className="absolute left-8 md:left-12 top-24 bottom-12 w-1 bg-gray-200 dark:bg-white/10">
+                                <motion.div
+                                    className="w-full bg-primary"
+                                    animate={{ height: `${(statusIndex / (steps.length - 1)) * 100}%` }}
+                                    transition={{ duration: 1 }}
+                                />
+                            </div>
+
+                            <div className="space-y-12 relative">
+                                {steps.filter(s => s.value !== 'awaiting_confirmation').map((step, idx) => {
+                                    const actualIdx = steps.findIndex(s => s.value === step.value);
+                                    const isActive = actualIdx <= statusIndex;
+                                    const isCurrent = actualIdx === statusIndex;
+
+                                    return (
+                                        <div key={step.value} className="flex items-center gap-6 md:gap-8">
+                                            <div className={cn(
+                                                "relative z-10 w-12 h-12 md:w-16 md:h-16 rounded-full flex items-center justify-center border-4 transition-all duration-500",
+                                                isActive
+                                                    ? "bg-primary border-primary/20 text-background"
+                                                    : "bg-gray-50 dark:bg-background border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-400"
+                                            )}>
+                                                {isActive ? step.icon : <div className="w-3 h-3 bg-gray-600 rounded-full" />}
+
+                                                {isCurrent && (
+                                                    <span className="absolute inset-0 rounded-full animate-ping bg-primary/30" />
+                                                )}
+                                            </div>
+
+                                            <div className={cn(
+                                                "transition-all duration-500",
+                                                isActive ? "opacity-100" : "opacity-30"
+                                            )}>
+                                                <h3 className="text-lg md:text-xl font-bold text-foreground">{step.label}</h3>
+                                                <p className="text-sm text-gray-500">
+                                                    {isCurrent ? 'Current Status' : actualIdx < statusIndex ? 'Completed' : 'Pending'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </>
+                    )}
 
                 </div>
 

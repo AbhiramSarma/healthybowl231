@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useCartStore } from '../features/cart/cartStore';
 import { useAuthStore } from '../features/auth/authStore';
 import { useNavigate } from 'react-router-dom';
-import { Smartphone, MapPin, User, Phone, Trash2, ChevronRight, Banknote } from 'lucide-react';
+import { Smartphone, MapPin, User, Phone, Trash2, ChevronRight, Banknote, Upload } from 'lucide-react';
 import { cn } from '../lib/utils';
 import apiUrl from '../lib/apiUrl';
 
@@ -17,6 +17,7 @@ export default function Checkout() {
     const [paymentMethod, setPaymentMethod] = useState('UPI');
     const [loading, setLoading] = useState(false);
     const [deliveryFee, setDeliveryFee] = useState(40);
+    const [paymentScreenshot, setPaymentScreenshot] = useState(null);
 
     useEffect(() => {
         // Fetch dynamic delivery fee
@@ -58,69 +59,63 @@ export default function Checkout() {
         setStep(step + 1);
     };
 
-    // Handle payment based on payment method
+    // Handle UPI payment with screenshot upload
     const handlePayment = async () => {
         if (!validateForm()) return;
 
-        if (!paymentMethod) {
-            alert("Please select a payment method");
+        if (!paymentScreenshot) {
+            alert("Please upload your payment screenshot after paying via UPI");
             return;
         }
 
         setLoading(true);
 
         try {
-            // Items already have preferences from cart, use them directly
-            const itemsWithPreferences = items;
+            const itemsWithPreferences = items.map(item => ({
+                id: item.id,
+                name: item.name,
+                price: item.price,
+                quantity: item.quantity,
+                cookingRequests: item.cookingRequests || {},
+                noGarlic: item.noGarlic || false,
+                noOnion: item.noOnion || false,
+                customInstructions: item.customInstructions || ''
+            }));
 
-            // For UPI/Card, use Razorpay flow
-            const orderRes = await fetch(apiUrl('/api/create-order'), {
+            const formData = new FormData();
+            formData.append('customer', JSON.stringify({
+                name: form.name.trim(),
+                phone: form.phone.replace(/\D/g, ''),
+                address: form.address.trim()
+            }));
+            formData.append('items', JSON.stringify(itemsWithPreferences));
+            formData.append('totalAmount', String(grandTotal));
+            formData.append('screenshot', paymentScreenshot);
+
+            const headers = {};
+            if (isAuthenticated && token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const res = await fetch(apiUrl('/api/create-order-upi'), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ amount: grandTotal })
+                headers,
+                body: formData
             });
-            const orderData = await orderRes.json();
 
-            // Simulate Verification (in production, this would be handled by Razorpay callback)
-            setTimeout(async () => {
-                const headers = { 
-                    'Content-Type': 'application/json'
-                };
-                // Add auth header only if user is authenticated
-                if (isAuthenticated && token) {
-                    headers['Authorization'] = `Bearer ${token}`;
-                }
+            const data = await res.json();
 
-                const verifyRes = await fetch(apiUrl('/api/verify-payment'), {
-                    method: 'POST',
-                    headers: headers,
-                    body: JSON.stringify({
-                        razorpay_order_id: orderData.id || "mock_order_id",
-                        razorpay_payment_id: "mock_payment_id_" + Date.now(),
-                        razorpay_signature: "mock_signature",
-                        orderDetails: {
-                            customer: form,
-                            items: itemsWithPreferences,
-                            totalAmount: grandTotal
-                        }
-                    })
-                });
-
-                const verifyData = await verifyRes.json();
-
-                if (verifyData.success) {
-                    clearCart();
-                    navigate(`/track-order?orderId=${verifyData.orderId}`);
-                } else {
-                    alert("Payment Verification Failed");
-                }
-                setLoading(false);
-            }, 2000);
-
+            if (data.success) {
+                clearCart();
+                navigate(`/track-order?orderId=${data.orderId}`);
+            } else {
+                alert(data.message || "Order submission failed");
+            }
         } catch (e) {
             console.error(e);
+            alert("Order submission failed. Please try again.");
+        } finally {
             setLoading(false);
-            alert("Payment Failed. Check Console.");
         }
     };
 
@@ -316,11 +311,40 @@ export default function Checkout() {
                                         </div>
                                     </div>
 
-                                    <div className="mt-8 p-6 bg-gray-50 dark:bg-background rounded-xl border border-gray-200 dark:border-white/5 text-center">
-                                        <div className="w-48 h-48 bg-white mx-auto mb-4 p-2">
-                                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=mock@upi&pn=HealthyBowl" alt="QR Code" />
+                                    <div className="space-y-6">
+                                        <div className="p-6 bg-gray-50 dark:bg-background rounded-xl border border-gray-200 dark:border-white/5 text-center">
+                                            <div className="w-48 h-48 bg-white mx-auto mb-4 p-2">
+                                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=mock@upi&pn=HealthyBowl&am=" + grandTotal alt="QR Code" />
+                                            </div>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">Scan to pay ₹{grandTotal} with Any UPI App</p>
                                         </div>
-                                        <p className="text-sm text-gray-500 dark:text-gray-400">Scan to pay with Any UPI App</p>
+
+                                        <div className="p-6 bg-gray-50 dark:bg-background rounded-xl border border-gray-200 dark:border-white/5">
+                                            <h3 className="font-bold text-foreground mb-2 flex items-center gap-2">
+                                                <Upload size={20} /> Upload Payment Screenshot
+                                            </h3>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">After payment, upload a screenshot of the success screen</p>
+                                            <label className="block cursor-pointer">
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    className="hidden"
+                                                    onChange={(e) => setPaymentScreenshot(e.target.files?.[0] || null)}
+                                                />
+                                                <div className={cn(
+                                                    "border-2 border-dashed rounded-xl p-6 text-center transition-colors",
+                                                    paymentScreenshot ? "border-green-500 bg-green-500/10" : "border-gray-300 dark:border-white/20 hover:border-primary"
+                                                )}>
+                                                    {paymentScreenshot ? (
+                                                        <p className="text-green-600 dark:text-green-400 font-medium">
+                                                            ✓ {paymentScreenshot.name}
+                                                        </p>
+                                                    ) : (
+                                                        <p className="text-gray-500 dark:text-gray-400">Click to select image (PNG, JPG)</p>
+                                                    )}
+                                                </div>
+                                            </label>
+                                        </div>
                                     </div>
                                 </motion.div>
                             )}
@@ -345,10 +369,10 @@ export default function Checkout() {
                             ) : (
                                 <button
                                     onClick={handlePayment}
-                                    disabled={loading || !paymentMethod}
+                                    disabled={loading || !paymentScreenshot}
                                     className="ml-auto bg-green-500 text-white px-8 py-3 rounded-full font-bold hover:bg-green-600 transition-colors flex items-center gap-2 disabled:opacity-50"
                                 >
-                                    {loading ? 'Processing...' : `Pay ₹${grandTotal}`}
+                                    {loading ? 'Submitting...' : `Submit Order ₹${grandTotal}`}
                                 </button>
                             )}
                         </div>
@@ -374,7 +398,7 @@ export default function Checkout() {
                                 </div>
                             </div>
                             <p className="text-xs text-gray-500 text-center">
-                                Secure checkout powered by Razorpay
+                                Pay via UPI & upload payment screenshot
                             </p>
                         </div>
                     </div>
